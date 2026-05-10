@@ -9,7 +9,7 @@ Sample apps demonstrating the [Stripe Embedded Components Onramp](https://docs.s
 | Directory | Platform | Description |
 |-----------|----------|-------------|
 | [`react-native-expo/`](react-native-expo/) | React Native (Expo) | Full crypto purchase flow using `@stripe/stripe-react-native` — authentication, KYC, wallet registration, and checkout |
-| [`react-web/`](react-web/) | React (Web) | _Coming soon_ |
+| [`react-web/`](react-web/) | React (Web) | Full crypto purchase flow using `@stripe/crypto` — authentication, KYC, wallet registration, and checkout |
 
 ## Prerequisites
 

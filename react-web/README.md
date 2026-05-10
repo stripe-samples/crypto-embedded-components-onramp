@@ -1,19 +1,21 @@
-# Crypto Embedded Components Onramp — React Web
+## Description
 
-A React web application demonstrating the [Stripe Embedded Components Onramp](https://docs.stripe.com/crypto/onramp/embedded-components) integration in the browser.
+Demo App for Stripe Embedded Components Onramp Web SDK
 
-> **Coming soon.** This example is under development.
+This contains a React App and Express Backend.
 
-## Overview
+## Development
 
-This example will demonstrate how to integrate the Stripe crypto onramp into a React web application, including:
+```bash
+yarn
+```
 
-- Authentication and account linking
-- KYC collection
-- Wallet registration
-- Payment and checkout with live quotes
+Create a `.env` file
 
-## Related
+```bash
+cp ./sample.env .env
+```
 
-- [React Native (Expo) example](../react-native-expo/) — the mobile integration of the same flow
-- [Embedded Components Onramp Integration Guide](https://docs.stripe.com/crypto/onramp/embedded-components-integration-guide)
+```bash
+yarn dev
+```
