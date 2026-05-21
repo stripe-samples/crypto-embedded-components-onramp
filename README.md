@@ -2,8 +2,6 @@
 
 Sample apps demonstrating the [Stripe Embedded Components Onramp](https://docs.stripe.com/crypto/onramp/embedded-components) integration across different platforms.
 
-> **Note:** These examples are for sandbox testing only and do not support live mode.
-
 ## Examples
 
 | Directory | Platform | Description |
@@ -14,7 +12,6 @@ Sample apps demonstrating the [Stripe Embedded Components Onramp](https://docs.s
 ## Prerequisites
 
 - A Stripe account with Embedded Components onramp access ([request access](https://docs.stripe.com/crypto/onramp#submit-your-application))
-- Stripe publishable and secret keys (sandbox)
 - OAuth client ID and secret (provisioned by Stripe during onboarding)
 
 Each example has its own README with platform-specific setup instructions.
