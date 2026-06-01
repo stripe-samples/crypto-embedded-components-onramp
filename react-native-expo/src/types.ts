@@ -97,7 +97,7 @@ export type RootStackParamList = {
      * Using kyc_tiers (not verifications) is authoritative — kyc_verified can
      * be non-not_started for L0 users, making verifications unreliable.
      */
-    currentTier: 'L0' | 'L1' | 'L2';
+    currentTier: 'l0' | 'l1' | 'l2';
     // Payment details carried forward so PaymentMethodScreen can pre-fill
     // amount, currency, and card after returning from the step-up flow.
     walletAddress: string;

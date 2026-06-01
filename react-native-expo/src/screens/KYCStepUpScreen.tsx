@@ -80,17 +80,17 @@ type StepUpPath =
   | 'collect_ssn_dob_then_doc' // missing_document + L0: SSN + DOB → verifyIdentity
   | 'verify_identity';         // missing_document + L1/L2: verifyIdentity only
 
-function getStepUpPath(errorCode: string, currentTier: 'L0' | 'L1' | 'L2'): StepUpPath {
+function getStepUpPath(errorCode: string, currentTier: 'l0' | 'l1' | 'l2'): StepUpPath {
   if (errorCode === 'crypto_onramp_missing_minimum_identity_verification') {
     return 'collect_l0_kyc';
   }
   if (errorCode === 'crypto_onramp_missing_identity_verification') {
     // L1 tier: verification was rejected — must re-submit full L1 fields.
     // L0 tier: name + address already on file, only SSN + DOB are missing.
-    return currentTier === 'L1' ? 'collect_full_l1' : 'collect_ssn_dob';
+    return currentTier === 'l1' ? 'collect_full_l1' : 'collect_ssn_dob';
   }
   // crypto_onramp_missing_document_verification
-  if (currentTier === 'L0') return 'collect_ssn_dob_then_doc';
+  if (currentTier === 'l0') return 'collect_ssn_dob_then_doc';
   return 'verify_identity'; // L1 or L2
 }
 
@@ -233,7 +233,7 @@ export default function KYCStepUpScreen({ navigation, route }: Props) {
     return (
       <View style={styles.container}>
         <View style={styles.simpleContent}>
-          <Text style={styles.tierBadge}>{currentTier} → L2</Text>
+          <Text style={styles.tierBadge}>{currentTier.toUpperCase()} → L2</Text>
           <Text style={styles.title}>Identity Document Required</Text>
           <Text style={styles.subtitle}>
             This transaction requires L2 verification. Photograph your
@@ -290,7 +290,7 @@ export default function KYCStepUpScreen({ navigation, route }: Props) {
       ? 'L0'
       : path === 'collect_full_l1'
         ? 'L1'
-        : currentTier;
+        : currentTier.toUpperCase();
 
   const titleText = {
     collect_l0_kyc:           'Basic Identity Verification',

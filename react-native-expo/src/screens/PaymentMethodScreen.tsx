@@ -204,7 +204,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         const tiers = result.data.kycTiers ?? [];
         setKycTiers(tiers);
         // Start the polling loop if the current tier is awaiting review.
-        const tierKey = deriveCurrentTier(tiers).toLowerCase() as 'l0' | 'l1' | 'l2';
+        const tierKey = deriveCurrentTier(tiers);
         const entry = tiers.find(t => t.tier === tierKey);
         if (entry?.verification_status === 'pending') startPolling();
       }
@@ -250,7 +250,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           // Look up the hardcoded limit for the customer's current verified tier.
           // Uses currentTier (derived from live kycTiers) — not settings.kycTier,
           // which is just the demo configuration and doesn't reflect step-ups.
-          setLimits(LOCAL_LIMITS[currentTier]);
+          setLimits(LOCAL_LIMITS[currentTier.toUpperCase() as 'L0' | 'L1' | 'L2']);
         }
       } catch (err: any) {
         setLimitsError(err.message);
@@ -280,7 +280,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
       if (result.success) {
         const tiers = result.data.kycTiers ?? [];
         setKycTiers(tiers);
-        const tierKey = deriveCurrentTier(tiers).toLowerCase() as 'l0' | 'l1' | 'l2';
+        const tierKey = deriveCurrentTier(tiers);
         const entry = tiers.find(t => t.tier === tierKey);
         if (entry?.verification_status === 'pending') {
           // Still pending — schedule next poll.
@@ -324,7 +324,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
       ? 'crypto_onramp_missing_document_verification'    // L2 rejected → redo verifyIdentity
       : 'crypto_onramp_missing_identity_verification';   // L1 rejected → re-collect SSN+DOB
 
-    const fromTier = rejectedEntry.tier === 'l2' ? 'L1' : 'L0';
+    const fromTier = rejectedEntry.tier === 'l2' ? 'l1' : 'l0';
 
     navigation.navigate('KYCStepUp', {
       customerId, authToken,
@@ -391,7 +391,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 
       const currentTier = deriveCurrentTier(freshTiers);
 
-      if (currentTier === 'L2') {
+      if (currentTier === 'l2') {
         // L2 is the highest tier — no further step-up is available.
         Alert.alert(
           'Maximum Tier Reached',
@@ -402,7 +402,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 
       // Map current tier to the error code KYCStepUpScreen uses to determine
       // which fields to collect.
-      const nextErrorCode = currentTier === 'L1'
+      const nextErrorCode = currentTier === 'l1'
         ? 'crypto_onramp_missing_document_verification'   // L1 → L2
         : 'crypto_onramp_missing_identity_verification';  // L0 → L1
 
@@ -490,7 +490,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const busy = creatingSession || steppingUp;
 
   // KYC status derived from live kycTiers state.
-  const currentTierKey = currentTier?.toLowerCase() as 'l0' | 'l1' | 'l2' | undefined;
+  const currentTierKey = currentTier;
   const currentTierEntry = currentTierKey ? kycTiers.find(t => t.tier === currentTierKey) : undefined;
   const currentTierStatus = currentTierEntry?.verification_status;
 
@@ -545,7 +545,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           {isKycPending
             ? <ActivityIndicator color="#635BFF" size="small" />
             : <Text style={[styles.tierBadge, isKycRejected && styles.tierBadgeRejected]}>
-                {isKycRejected ? 'Rejected' : `Current: ${currentTier}`}
+                {isKycRejected ? 'Rejected' : `Current: ${currentTier?.toUpperCase()}`}
               </Text>
           }
         </View>
@@ -590,7 +590,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           <Text style={styles.limitsSource}>
             {settings.limitSource === 'api'
               ? '🔵 Live API'
-              : `📋 Local (${currentTier ?? '…'})`}
+              : `📋 Local (${currentTier?.toUpperCase() ?? '…'})`}
           </Text>
         </View>
 
