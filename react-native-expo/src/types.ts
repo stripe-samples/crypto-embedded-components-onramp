@@ -123,5 +123,11 @@ export type RootStackParamList = {
     transactionId?: string;
     destinationAmount?: string;
     destinationCurrency?: string;
+    /** Passed from CheckoutScreen so the user can start another purchase
+     *  without going through sign-in or KYC again. */
+    customerId?: string;
+    authToken?: string;
+    walletAddress?: string;
+    network?: string;
   };
 };

@@ -28,7 +28,7 @@ function formatCurrency(amount: string | number, currency: string): string {
 
 export default function CheckoutScreen({ navigation, route }: Props) {
   const {
-    authToken, walletAddress, network, sessionId,
+    customerId, authToken, walletAddress, network, sessionId,
     sourceAmount, sourceCurrency, destinationCurrency, paymentLabel,
   } = route.params;
 
@@ -119,6 +119,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
       navigation.replace('Success', {
         destinationAmount: quote?.destination_amount,
         destinationCurrency,
+        customerId, authToken, walletAddress, network,
       });
     } catch {
       Alert.alert('Checkout Failed', SERVICE_TIMEOUT_ERROR);

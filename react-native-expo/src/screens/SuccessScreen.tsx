@@ -10,7 +10,12 @@ type Props = {
 };
 
 export default function SuccessScreen({ navigation, route }: Props) {
-  const { transactionId, destinationAmount, destinationCurrency } = route.params;
+  const {
+    transactionId, destinationAmount, destinationCurrency,
+    customerId, authToken, walletAddress, network,
+  } = route.params;
+
+  const canBuyAgain = !!(customerId && authToken && walletAddress && network);
 
   return (
     <View style={styles.container}>
@@ -26,12 +31,32 @@ export default function SuccessScreen({ navigation, route }: Props) {
           Tx: {transactionId}
         </Text>
       ) : null}
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => navigation.popToTop()}
-      >
-        <Text style={styles.buttonText}>Buy More</Text>
-      </TouchableOpacity>
+
+      <View style={styles.actions}>
+        {canBuyAgain && (
+          <TouchableOpacity
+            style={styles.buttonPrimary}
+            onPress={() =>
+              navigation.navigate('PaymentMethod', {
+                customerId: customerId!,
+                authToken: authToken!,
+                walletAddress: walletAddress!,
+                network: network!,
+              })
+            }
+          >
+            <Text style={styles.buttonText}>New Purchase</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={canBuyAgain ? styles.buttonSecondary : styles.buttonPrimary}
+          onPress={() => navigation.popToTop()}
+        >
+          <Text style={canBuyAgain ? styles.buttonSecondaryText : styles.buttonText}>
+            Start Over
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -67,11 +92,23 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     paddingHorizontal: 16,
   },
-  button: {
+  actions: {
+    width: '100%',
+    gap: 12,
+  },
+  buttonPrimary: {
     backgroundColor: '#635BFF',
     paddingVertical: 16,
-    paddingHorizontal: 48,
     borderRadius: 12,
+    alignItems: 'center',
+  },
+  buttonSecondary: {
+    borderWidth: 1,
+    borderColor: '#333',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  buttonSecondaryText: { color: '#888', fontSize: 16, fontWeight: '600' },
 });
