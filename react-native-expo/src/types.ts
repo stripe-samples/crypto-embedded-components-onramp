@@ -51,24 +51,38 @@ export type RootStackParamList = {
     dobMonth?: number;
     dobYear?: number;
   };
-  Wallet: { customerId: string; authToken: string };
+  Wallet: {
+    customerId: string;
+    authToken: string;
+  };
   PaymentMethod: {
     customerId: string;
     authToken: string;
     walletAddress: string;
     network: string;
+    /**
+     * Pre-filled when returning from KYCStepUpScreen. Carrying these params
+     * back lets PaymentMethod re-check limits for the new tier without asking
+     * the user to re-enter their card or amount.
+     */
+    paymentToken?: string;
+    paymentLabel?: string;
+    sourceAmount?: string;
+    destinationCurrency?: string;
   };
   /**
-   * KYC step-up screen. Shown when session creation returns a KYC error.
-   * Collects only the incremental fields the user hasn't yet provided, based
-   * on the Stripe error code and their current verification status:
+   * KYC step-up screen. Reached from PaymentMethodScreen when the entered
+   * amount exceeds the current tier's transaction limit. Collects only the
+   * incremental fields needed for the next tier:
    *
    *   missing_identity_verification  + currentTier=L0 → collect SSN + DOB → attachKycInfo
    *   missing_document_verification  + currentTier=L0 → collect SSN + DOB → attachKycInfo → verifyIdentity
    *   missing_document_verification  + currentTier=L1 → verifyIdentity only
    *
-   * After the SDK calls succeed, navigates back (goBack) to allow the user to
-   * retry the session.
+   * After SDK calls succeed, navigates back to PaymentMethodScreen with the
+   * original payment params pre-filled. PaymentMethodScreen polls until the
+   * new tier is verified, then re-checks limits and either steps up again or
+   * proceeds to createOnrampSession().
    */
   KYCStepUp: {
     customerId: string;
@@ -78,11 +92,14 @@ export type RootStackParamList = {
       | 'crypto_onramp_missing_minimum_identity_verification'
       | 'crypto_onramp_missing_identity_verification'
       | 'crypto_onramp_missing_document_verification';
-    /** kycStatus from getCryptoCustomer — used to determine the current tier. */
-    kycStatus: string;
-    /** idDocStatus from getCryptoCustomer — used to determine the current tier. */
-    idDocStatus: string;
-    // Original payment details — used to retry session creation after step-up.
+    /**
+     * Customer's current KYC tier, derived from kyc_tiers via deriveCurrentTier().
+     * Using kyc_tiers (not verifications) is authoritative — kyc_verified can
+     * be non-not_started for L0 users, making verifications unreliable.
+     */
+    currentTier: 'L0' | 'L1' | 'L2';
+    // Payment details carried forward so PaymentMethodScreen can pre-fill
+    // amount, currency, and card after returning from the step-up flow.
     walletAddress: string;
     network: string;
     sourceAmount: string;

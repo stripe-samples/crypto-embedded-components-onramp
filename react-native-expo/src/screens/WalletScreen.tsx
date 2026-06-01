@@ -47,14 +47,16 @@ export default function WalletScreen({ navigation, route }: Props) {
     })();
   }, [customerId, authToken]);
 
+  // After a wallet is attached, go to PaymentMethod. PaymentMethod will fetch
+  // the customer's kycTiers on mount and poll until any pending verification
+  // resolves before allowing the user to proceed.
+  const goToNextScreen = (walletAddress: string, walletNetwork: string) => {
+    navigation.navigate('PaymentMethod', { customerId, authToken, walletAddress, network: walletNetwork });
+  };
+
   const handleUseExisting = () => {
     if (!selectedWallet) return;
-    navigation.navigate('PaymentMethod', {
-      customerId,
-      authToken,
-      walletAddress: selectedWallet.wallet_address,
-      network: selectedWallet.network,
-    });
+    goToNextScreen(selectedWallet.wallet_address, selectedWallet.network);
   };
 
   const handleRegister = async () => {
@@ -69,12 +71,7 @@ export default function WalletScreen({ navigation, route }: Props) {
         Alert.alert('Error', result.error.message);
         return;
       }
-      navigation.navigate('PaymentMethod', {
-        customerId,
-        authToken,
-        walletAddress: address.trim(),
-        network,
-      });
+      goToNextScreen(address.trim(), network);
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
