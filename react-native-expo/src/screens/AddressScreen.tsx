@@ -1,7 +1,22 @@
+/**
+ * AddressScreen — collect the customer's home address and submit KYC data.
+ *
+ * Recommended operations at this step:
+ *   - Collect home address (line1, city, state, postalCode).
+ *   - Call attachKycInfo({ firstName, lastName, address }) for L0.
+ *     L1/L2: also include idNumber and dateOfBirth collected in KYCScreen.
+ *   - L2 only: call verifyIdentity() after attachKycInfo to capture a
+ *     government-issued ID document and selfie via Stripe's built-in UI.
+ *
+ * attachKycInfo() merges with any data already on file — only send the fields
+ * collected in this onboarding flow (do not re-send fields from prior sessions).
+ *
+ * Next screen: WalletScreen
+ */
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView, Modal, FlatList,
+  ActivityIndicator, Alert, ScrollView, Modal, FlatList, Linking,
 } from 'react-native';
 import { useOnramp } from '../hooks/useOnramp';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -88,6 +103,9 @@ export default function AddressScreen({ navigation, route }: Props) {
         }
       }
 
+      // Proceed to wallet attachment. PaymentMethodScreen (reached after the
+      // wallet is registered) will poll getCryptoCustomer() to confirm the
+      // initial KYC submission is verified before allowing a purchase.
       navigation.navigate('Wallet', { customerId, authToken });
     } catch (err: any) {
       Alert.alert('Error', err.message);
@@ -101,6 +119,7 @@ export default function AddressScreen({ navigation, route }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.tierBadge}>{settings.kycTier}</Text>
       <Text style={styles.title}>Add your home address</Text>
       <Text style={styles.subtitle}>Currently only US addresses are supported</Text>
 
@@ -124,6 +143,19 @@ export default function AddressScreen({ navigation, route }: Props) {
         <View style={{ flex: 1 }}>
           <Row label="ZIP" value={form.postalCode} onChange={set('postalCode')} keyboardType="numeric" />
         </View>
+      </View>
+
+      {/* SDK call reference */}
+      <View style={styles.infoCard}>
+        <Text style={styles.infoCardTitle}>SDK calls on submit</Text>
+        <Text style={styles.infoCardBody}>
+          <Text style={styles.infoCode}>attachKycInfo(&#123; firstName, lastName, address
+            {settings.kycTier !== 'L0' ? ', idNumber, dateOfBirth' : ''}
+          {' '}&#125;)</Text>
+          {settings.kycTier === 'L2' && (
+            <Text>{'\n'}<Text style={styles.infoCode}>verifyIdentity()</Text></Text>
+          )}
+        </Text>
       </View>
 
       <TouchableOpacity
@@ -246,6 +278,19 @@ const s = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
   content: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32 },
+  tierBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#1a1a2e',
+    borderWidth: 1,
+    borderColor: '#635BFF',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    color: '#635BFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
   title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#888', marginBottom: 24 },
   row2: { flexDirection: 'row' },
@@ -258,4 +303,23 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  infoCard: {
+    backgroundColor: '#141414',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  infoCardTitle: {
+    color: '#635BFF',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  infoCardBody: { color: '#777', fontSize: 13, lineHeight: 20 },
+  infoCode: { fontFamily: 'monospace', color: '#aaa', fontSize: 12 },
 });

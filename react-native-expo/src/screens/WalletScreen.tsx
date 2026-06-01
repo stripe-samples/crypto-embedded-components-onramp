@@ -1,3 +1,15 @@
+/**
+ * WalletScreen — select or register the destination crypto wallet.
+ *
+ * Recommended operations at this step:
+ *   - Call getCustomerWallets() to list wallets already attached to the customer.
+ *   - If the user selects an existing wallet, proceed without an API call.
+ *   - If the user adds a new address, call registerWalletAddress(address, network).
+ *
+ * Next screen: PaymentMethodScreen
+ *   PaymentMethodScreen fetches kycTiers on mount and polls getCryptoCustomer()
+ *   if the initial KYC submission is still under review before allowing a purchase.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,

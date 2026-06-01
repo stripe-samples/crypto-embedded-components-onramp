@@ -1,3 +1,13 @@
+/**
+ * KYCPrimerScreen — consent and overview screen shown before identity collection.
+ *
+ * Recommended operations at this step:
+ *   - Display what information will be collected (varies by KYC tier).
+ *   - Explain that the data is handled by Link / Stripe, not the merchant.
+ *   - No API calls are made here.
+ *
+ * Next screen: KYCScreen (collects name; L1/L2 also collect SSN + date of birth)
+ */
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { MERCHANT_DISPLAY_NAME } from '../constants';
@@ -41,6 +51,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.tierBadge}>{settings.kycTier}</Text>
       <Text style={styles.title}>Add your personal info</Text>
       <Text style={styles.description}>
         Next, Link needs to collect a few personal details to verify your
@@ -101,6 +112,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 48,
     paddingBottom: 32,
+  },
+  tierBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#1a1a2e',
+    borderWidth: 1,
+    borderColor: '#635BFF',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    color: '#635BFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 12,
   },
   title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 12 },
   description: { fontSize: 14, color: '#999', lineHeight: 20, marginBottom: 28 },

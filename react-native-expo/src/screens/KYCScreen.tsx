@@ -1,16 +1,23 @@
 /**
  * KYCScreen — collect personal identity fields based on the configured KYC tier.
  *
- *   L0: First name + last name only. No SSN, no date of birth.
- *       The user proceeds to AddressScreen which calls attachKycInfo with
- *       just name + address. They will be prompted to provide SSN/DOB later
- *       if they attempt a purchase above the L0 transaction limit.
+ * Recommended operations at this step:
+ *   - Collect first name and last name (all tiers).
+ *   - L1/L2: also collect SSN and date of birth.
+ *   - No API calls are made here; all fields are forwarded to AddressScreen
+ *     which bundles them into a single attachKycInfo() call.
  *
- *   L1: First name + last name + SSN + date of birth.
- *       AddressScreen calls attachKycInfo with the full set of fields.
+ * Tier behaviour:
+ *   L0: name only. AddressScreen calls attachKycInfo({ name, address }).
+ *       If the user later attempts a purchase above the L0 limit, PaymentMethod
+ *       triggers a step-up (KYCStepUpScreen) to collect SSN + DOB.
  *
- *   L2: Same fields as L1. AddressScreen additionally calls verifyIdentity()
+ *   L1: name + SSN + DOB. AddressScreen calls attachKycInfo with all fields.
+ *
+ *   L2: same fields as L1. AddressScreen additionally calls verifyIdentity()
  *       to capture a government-issued ID document and selfie.
+ *
+ * Next screen: AddressScreen
  *
  * Merchant note: the tier selection is purely for demo purposes. In a real
  * integration you determine which fields to collect based on your compliance
@@ -20,7 +27,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ScrollView,
+  Alert, ScrollView, Linking,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -104,6 +111,7 @@ export default function KYCScreen({ navigation, route }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.tierBadge}>{settings.kycTier}</Text>
       <Text style={styles.title}>Add your personal info</Text>
       <Text style={styles.subtitle}>
         {collectSensitiveFields
@@ -114,6 +122,20 @@ export default function KYCScreen({ navigation, route }: Props) {
       {/* Name — collected at every tier */}
       <Row label="First Name" value={form.firstName} onChange={set('firstName')} autoCapitalize="words" />
       <Row label="Last Name" value={form.lastName} onChange={set('lastName')} autoCapitalize="words" />
+
+      {/* Test mode hint */}
+      <View style={styles.testCard}>
+        <Text style={styles.testCardTitle}>Test mode</Text>
+        <Text style={styles.testCardBody}>
+          Use <Text style={styles.testCardCode}>Verified</Text> as the last name to pass L0 KYC in test mode.{' '}
+          <Text
+            style={styles.testCardLink}
+            onPress={() => Linking.openURL('https://docs.stripe.com/crypto/onramp/embedded-components-integration-guide?platform=react-native#test-values')}
+          >
+            See all test values →
+          </Text>
+        </Text>
+      </View>
 
       {/* SSN + DOB — L1 and L2 only */}
       {collectSensitiveFields && (
@@ -203,8 +225,40 @@ const s = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
   content: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32 },
+  tierBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#1a1a2e',
+    borderWidth: 1,
+    borderColor: '#635BFF',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    color: '#635BFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
   title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#888', marginBottom: 24 },
+  testCard: {
+    backgroundColor: '#141f14',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#1e3a1e',
+  },
+  testCardTitle: {
+    color: '#22c55e',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  testCardBody: { color: '#777', fontSize: 13, lineHeight: 18 },
+  testCardCode: { color: '#aaa', fontFamily: 'monospace', fontSize: 12 },
+  testCardLink: { color: '#635BFF' },
   section: { color: '#635BFF', fontSize: 14, fontWeight: '600', marginBottom: 12, marginTop: 8 },
   row3: { flexDirection: 'row', marginBottom: 16, marginHorizontal: -4 },
   button: {
