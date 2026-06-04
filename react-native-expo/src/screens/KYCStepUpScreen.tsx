@@ -144,10 +144,15 @@ export default function KYCStepUpScreen({ navigation, route }: Props) {
   const needsVerifyIdentity = path === 'collect_ssn_dob_then_doc' || path === 'verify_identity';
 
   // After SDK calls succeed, return to PaymentMethod with the original payment
-  // params pre-filled. PaymentMethod will fetch fresh kycTiers on mount, detect
+  // params pre-filled. PaymentMethod will fetch fresh kycTiers on focus, detect
   // the pending verification, and poll until Stripe's review resolves.
+  //
+  // navigate() (not replace) pops KYCStepUpScreen and returns to the existing
+  // PaymentMethod instance, avoiding a duplicate PaymentMethod on the stack.
+  // Without this, back-navigation from Checkout would land on the pre-step-up
+  // PaymentMethod (showing the old, lower KYC tier) instead of the updated one.
   const goToPaymentMethod = () => {
-    navigation.replace('PaymentMethod', {
+    navigation.navigate('PaymentMethod', {
       customerId, authToken, walletAddress, network,
       sourceAmount, destinationCurrency, paymentToken, paymentLabel,
     });

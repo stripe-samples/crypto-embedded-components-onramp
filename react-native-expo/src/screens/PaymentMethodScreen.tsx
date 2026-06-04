@@ -105,7 +105,8 @@
  * See: https://docs.stripe.com/crypto/onramp/kyc-integration-guide
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView,
@@ -187,41 +188,95 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Load KYC tiers on mount; start polling if a tier is still pending
+  // Sync route.params into local state when navigated back from KYCStepUpScreen.
   //
-  // This runs on initial load AND when returning from KYCStepUpScreen (new
-  // navigation instance with fresh route params). When the current tier's
-  // verification_status is 'pending', we start polling getCryptoCustomer()
-  // every 3 s until the status resolves to 'verified' or 'rejected'.
+  // useState initializers only run on first mount. When KYCStepUpScreen calls
+  // navigation.navigate('PaymentMethod', updatedParams) it pops itself and
+  // returns to this screen, updating route.params — but not re-running useState.
+  // These effects detect param changes and push them into local state.
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    (async () => {
-      setLoadingTiers(true);
-      const result = await getCryptoCustomer(customerId, authToken);
-      if (!mountedRef.current) return;
-      if (result.success) {
-        const tiers = result.data.kycTiers ?? [];
-        setKycTiers(tiers);
-        // Start the polling loop if the current tier is awaiting review.
-        const tierKey = deriveCurrentTier(tiers);
-        const entry = tiers.find(t => t.tier === tierKey);
-        if (entry?.verification_status === 'pending') startPolling();
+    if (routePaymentToken) {
+      setCryptoPaymentToken(routePaymentToken);
+      setPaymentLabel(routePaymentLabel ?? '');
+      setPaymentReady(true);
+    }
+  }, [routePaymentToken, routePaymentLabel]);
+
+  useEffect(() => {
+    if (routeSourceAmount) setSourceAmount(routeSourceAmount);
+  }, [routeSourceAmount]);
+
+  useEffect(() => {
+    if (routeDestCurrency) setDestCurrency(routeDestCurrency);
+  }, [routeDestCurrency]);
+
+  // ---------------------------------------------------------------------------
+  // Load KYC tiers on focus; start polling if a tier is still pending
+  //
+  // useFocusEffect runs both on initial mount and whenever the screen regains
+  // focus (e.g. after returning from KYCStepUpScreen). This ensures we always
+  // see the latest verification status after a step-up, without needing a
+  // second PaymentMethod instance on the navigation stack.
+  //
+  // When the current tier's verification_status is 'pending', we start polling
+  // getCryptoCustomer() every 3 s until the status resolves.
+  // ---------------------------------------------------------------------------
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      // Cancel any stale polling timer from a previous focus session.
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
       }
-      setLoadingTiers(false);
-    })();
-  }, [customerId, authToken]);
+
+      (async () => {
+        setLoadingTiers(true);
+        const result = await getCryptoCustomer(customerId, authToken);
+        if (cancelled || !mountedRef.current) return;
+        if (result.success) {
+          const tiers = result.data.kycTiers ?? [];
+          setKycTiers(tiers);
+          const tierKey = deriveCurrentTier(tiers);
+          const entry = tiers.find(t => t.tier === tierKey);
+          if (entry?.verification_status === 'pending') {
+            startPolling();
+          } else {
+            // Tier resolved (or was never pending) — clear any leftover polling state.
+            setVerifyingKyc(false);
+          }
+        }
+        setLoadingTiers(false);
+      })();
+
+      return () => {
+        cancelled = true;
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      };
+    }, [customerId, authToken]),
+  );
 
   // ---------------------------------------------------------------------------
   // Load transaction limits
   //
-  // Depends on currentTier so it re-runs when the customer's tier changes —
-  // either on initial load or after returning from a KYC step-up.
+  // Re-runs when currentTier changes (step-up to a new tier) OR when
+  // verifyingKyc transitions from true → false (pending verification resolved).
+  // The latter is necessary because currentTier stays 'l2' for both
+  // pending and verified states, so without verifyingKyc in the deps the
+  // API would never re-fetch the updated limits after L2 is confirmed.
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    // Wait until tiers are resolved so we don't show limits for the wrong tier.
-    if (currentTier === null) return;
+    // Wait until tiers are resolved and not mid-polling so we fetch the limit
+    // for the customer's actual verified tier, not a still-pending one.
+    if (currentTier === null || verifyingKyc) return;
 
     (async () => {
       setLoadingLimits(true);
@@ -258,7 +313,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         setLoadingLimits(false);
       }
     })();
-  }, [authToken, walletAddress, network, settings.limitSource, currentTier]);
+  }, [authToken, walletAddress, network, settings.limitSource, currentTier, verifyingKyc]);
 
   // ---------------------------------------------------------------------------
   // KYC verification polling
@@ -534,7 +589,9 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
       : styles.button;
 
   // Payment method required for all flows except re-entering KYC after rejection.
-  const buttonDisabled = isKycPending || busy || (!isKycRejected && !paymentReady);
+  // loadingLimits is included so the button stays disabled while limits refresh
+  // after a pending verification resolves (prevents proceeding with stale limits).
+  const buttonDisabled = isKycPending || loadingLimits || busy || (!isKycRejected && !paymentReady);
 
   // ---------------------------------------------------------------------------
   // Render
