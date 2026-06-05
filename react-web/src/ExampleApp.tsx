@@ -496,7 +496,7 @@ const ExampleAppInner: React.FC<{
         setLoading(false);
       }
     },
-    [log, linkAuthIntentId, livemode, surfaceError],
+    [log, onramp, linkAuthIntentId, livemode, surfaceError],
   );
 
   const handleAddFunds = useCallback(

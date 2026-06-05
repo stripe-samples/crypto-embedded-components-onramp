@@ -93,6 +93,18 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   const colors = t.colors;
   const { glowCardSx, inputSx, accentButtonSx } = t;
 
+  // Destructure the props used inside hooks so the exhaustive-deps rule is
+  // satisfied without adding the whole `props` object to dependency arrays.
+  const {
+    linkAuthIntentId,
+    livemode,
+    setError,
+    log,
+    cryptoCustomerId,
+    selectedWallet,
+    selectedWalletNetwork,
+  } = props;
+
   const KYC_CHIP: Record<string, { color: string; label: string }> = {
     L2: { color: colors.success, label: "L2" },
     L1: { color: colors.cyan, label: "L1" },
@@ -196,7 +208,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // ─── Quote expiration countdown + auto-refresh ────────
 
   const refreshQuote = useCallback(async () => {
-    if (!session || !props.linkAuthIntentId) return;
+    if (!session || !linkAuthIntentId) return;
     setRefreshingQuote(true);
     try {
       const res = await fetch(
@@ -205,8 +217,8 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            lai: props.linkAuthIntentId,
-            livemode: props.livemode,
+            lai: linkAuthIntentId,
+            livemode,
           }),
         },
       );
@@ -240,10 +252,10 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
         );
       }
     } catch (e: any) {
-      props.setError(`Quote refresh failed: ${e?.message || e}`);
+      setError(`Quote refresh failed: ${e?.message || e}`);
     }
     setRefreshingQuote(false);
-  }, [session, props.linkAuthIntentId, props.livemode, props.setError]);
+  }, [session, linkAuthIntentId, livemode, setError]);
 
   // Start countdown when entering confirm with a session
   useEffect(() => {
@@ -299,24 +311,24 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // ─── Wallet fetch ─────────────────────────────────────
 
   const fetchWallets = useCallback(async () => {
-    if (!props.cryptoCustomerId || !props.linkAuthIntentId) return;
+    if (!cryptoCustomerId || !linkAuthIntentId) return;
     setLoadingWallets(true);
     try {
       const r = await fetch(
-        `/api/crypto/customers/${props.cryptoCustomerId}/wallets?lai=${encodeURIComponent(props.linkAuthIntentId)}&livemode=${props.livemode}`,
+        `/api/crypto/customers/${cryptoCustomerId}/wallets?lai=${encodeURIComponent(linkAuthIntentId)}&livemode=${livemode}`,
       );
       if (r.ok) {
         const d = await r.json();
         setWallets(d.data ?? []);
       } else {
         const d = await r.json().catch(() => null);
-        props.setError(`Failed to load wallets: ${d?.error ?? `HTTP ${r.status}`}`);
+        setError(`Failed to load wallets: ${d?.error ?? `HTTP ${r.status}`}`);
       }
     } catch (e: any) {
-      props.setError(`Failed to load wallets: ${e?.message || e}`);
+      setError(`Failed to load wallets: ${e?.message || e}`);
     }
     setLoadingWallets(false);
-  }, [props.cryptoCustomerId, props.linkAuthIntentId, props.livemode, props.setError]);
+  }, [cryptoCustomerId, linkAuthIntentId, livemode, setError]);
 
   useEffect(() => {
     if (step === 2) fetchWallets();
@@ -325,22 +337,21 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // Fetch transaction limits when entering the Buy step, in parallel with any
   // other loading the step does.
   useEffect(() => {
-    if (step !== 4 || !props.linkAuthIntentId) return;
+    if (step !== 4 || !linkAuthIntentId) return;
     setTransactionLimits(null);
     setLoadingLimits(true);
-    const lai = props.linkAuthIntentId;
-    const qs = new URLSearchParams({ lai, livemode: String(props.livemode) });
-    if (props.selectedWallet) qs.append("wallet_address", props.selectedWallet);
-    if (props.selectedWalletNetwork) qs.append("destination_network", props.selectedWalletNetwork);
+    const qs = new URLSearchParams({ lai: linkAuthIntentId, livemode: String(livemode) });
+    if (selectedWallet) qs.append("wallet_address", selectedWallet);
+    if (selectedWalletNetwork) qs.append("destination_network", selectedWalletNetwork);
     fetch(`/api/crypto/onramp_transaction_limits?${qs.toString()}`)
       .then((r) => r.json())
       .then((data) => {
         if (data && data.limits) setTransactionLimits(data);
-        else props.log("Transaction limits fetch returned unexpected shape", JSON.stringify(data));
+        else log("Transaction limits fetch returned unexpected shape", JSON.stringify(data));
       })
-      .catch((e) => props.log("Transaction limits fetch failed", e?.message || String(e)))
+      .catch((e) => log("Transaction limits fetch failed", e?.message || String(e)))
       .finally(() => setLoadingLimits(false));
-  }, [step, props.linkAuthIntentId, props.livemode, props.selectedWallet, props.selectedWalletNetwork]);
+  }, [step, linkAuthIntentId, livemode, selectedWallet, selectedWalletNetwork, log]);
 
   // ─── Poll checkout ────────────────────────────────────
 
