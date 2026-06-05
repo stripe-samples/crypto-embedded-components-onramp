@@ -292,14 +292,6 @@ app.get("/api/crypto/customers/:customerId", async (req, res) => {
     const kycRegion = data.kyc_region ?? null;
     const kycTiers = data.kyc_tiers ?? [];
 
-    console.log("[KYC Raw API Response]", JSON.stringify(data, null, 2));
-    console.log("[KYC Debug]", JSON.stringify({
-      customerId,
-      kyc_region: kycRegion,
-      kyc_tiers: kycTiers,
-      verifications,
-      provided_fields: providedFields,
-    }, null, 2));
 
     // Derive kyc_level from kyc_tiers (canonical source) with verifications as fallback
     let kyc_level: string;
