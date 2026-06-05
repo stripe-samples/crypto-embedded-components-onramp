@@ -22,7 +22,7 @@ import type {
 } from "@stripe/crypto";
 import { loadCryptoOnrampAndInitialize } from "@stripe/crypto";
 import { LinkAuthenticationModal } from "./LinkAuthenticationModal";
-import type { AccountStatus, KycLevel } from "./types";
+import type { AccountStatus, KycLevel, KycRegion, Verification } from "./types";
 
 function timestamp(): string {
   return new Date().toLocaleTimeString(undefined, {
@@ -115,6 +115,9 @@ const ExampleAppInner: React.FC<{
     () => new URLSearchParams(window.location.search).get("lai") ?? null,
   );
   const [kycLevel, setKYCLevel] = useState<KycLevel>("REQUIRES_KYC");
+  const [kycRegion, setKycRegion] = useState<KycRegion>(null);
+  const [verifications, setVerifications] = useState<Verification[]>([]);
+  const [providedFields, setProvidedFields] = useState<string[]>([]);
   const [cryptoCustomerId, setCryptoCustomerId] = useState<
     string | null | undefined
   >(null);
@@ -170,6 +173,7 @@ const ExampleAppInner: React.FC<{
         "L1",
         "L2",
         "REJECTED",
+        "PENDING",
       ]);
       setPolling(true);
       setError(null);
@@ -189,7 +193,16 @@ const ExampleAppInner: React.FC<{
           }
           const json = await response.json();
           const level = json.kyc_level;
-          log(`KYC Level: ${level}`);
+          if (json.kyc_region !== undefined) {
+            setKycRegion(json.kyc_region);
+          }
+          if (json.verifications) {
+            setVerifications(json.verifications);
+          }
+          if (json.provided_fields) {
+            setProvidedFields(json.provided_fields);
+          }
+          log(`KYC Level: ${level}${json.kyc_region ? `, Region: ${json.kyc_region}` : ""}`);
           setKYCLevel(level);
           if (terminalStates.has(level)) break;
           await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -709,6 +722,10 @@ const ExampleAppInner: React.FC<{
             cryptoCustomerId={cryptoCustomerId}
             linkAuthIntentId={linkAuthIntentId}
             kycLevel={kycLevel}
+            kycRegion={kycRegion}
+            verifications={verifications}
+            providedFields={providedFields}
+            onramp={onramp}
             cryptoPaymentToken={cryptoPaymentToken}
             selectedWallet={selectedWallet}
             selectedWalletNetwork={selectedWalletNetwork}
@@ -726,6 +743,11 @@ const ExampleAppInner: React.FC<{
             onAddFunds={handleAddFunds}
             onCheckout={handleCheckout}
             onSelectWallet={handleSelectWallet}
+            onRefreshKycLevel={() => {
+              if (cryptoCustomerId && linkAuthIntentId) {
+                refreshKycLevel(cryptoCustomerId, linkAuthIntentId);
+              }
+            }}
             authenticating={!!authenticationElement}
             log={log}
           />

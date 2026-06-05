@@ -20,10 +20,12 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { Dayjs } from "dayjs";
-import type { KycInfo, CryptoNetwork } from "@stripe/crypto";
+import type { KycInfo, CryptoNetwork, OnrampCoordinator } from "@stripe/crypto";
 import { getTheme } from "./theme";
-import { EXPLORER_URLS, getNetworks } from "./shared";
-import type { AccountStatus, KycLevel, Wallet, OnrampSession } from "./types";
+import { EXPLORER_URLS, getNetworks, isEuCountry, EU_COUNTRIES } from "./shared";
+import { EU_COUNTRY_NAMES } from "./euIdentifiers";
+import type { AccountStatus, KycLevel, KycRegion, Verification, Wallet, OnrampSession } from "./types";
+import { EuKycStep } from "./EuKycStep";
 
 export type WizardViewProps = {
   darkMode: boolean;
@@ -35,6 +37,10 @@ export type WizardViewProps = {
   cryptoCustomerId: string | null | undefined;
   linkAuthIntentId: string | null | undefined;
   kycLevel: KycLevel;
+  kycRegion: KycRegion;
+  verifications: Verification[];
+  providedFields: string[];
+  onramp: OnrampCoordinator;
   cryptoPaymentToken: string | null | undefined;
   selectedWallet: string | null;
   selectedWalletNetwork: string | null;
@@ -60,6 +66,7 @@ export type WizardViewProps = {
   onSelectWallet: (
     wallet: { wallet_address: string; network: string } | null,
   ) => void;
+  onRefreshKycLevel: () => void;
   authenticating: boolean;
   log: (event: string, detail?: string) => void;
 };
@@ -458,6 +465,91 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
       // STEP 1: KYC
       // ═══════════════════════════════════════════════════
       case 1: {
+        // For returning users with a known region, skip the picker
+        if (props.kycRegion === "eu") {
+          return (
+            <EuKycStep
+              darkMode={props.darkMode}
+              onramp={props.onramp}
+              kycLevel={props.kycLevel}
+              verifications={props.verifications}
+              providedFields={props.providedFields}
+              polling={props.polling}
+              loading={props.loading}
+              onComplete={() => goTo(2)}
+              onRefreshKycLevel={props.onRefreshKycLevel}
+              setError={props.setError}
+              log={props.log}
+            />
+          );
+        }
+
+        // Country selector + form routing for new users (region unknown)
+        if (!props.kycRegion) {
+          const countrySelector = (
+            <TextField
+              select
+              label="Country of residence"
+              value={kycCountry}
+              onChange={(e) => setKycCountry(e.target.value)}
+              size="small"
+              fullWidth
+              sx={inputSx}
+            >
+              <MenuItem value="US">United States (US)</MenuItem>
+              <MenuItem disabled sx={{ fontSize: "0.75rem", opacity: 0.5 }}>── EU / EEA ──</MenuItem>
+              {Array.from(EU_COUNTRIES).sort().map((code) => (
+                <MenuItem key={code} value={code}>
+                  {EU_COUNTRY_NAMES[code] ?? code} ({code})
+                </MenuItem>
+              ))}
+            </TextField>
+          );
+
+          if (isEuCountry(kycCountry)) {
+            return (
+              <Stack spacing={3}>
+                {countrySelector}
+                <Divider sx={{ borderColor: colors.borderSubtle }} />
+                <EuKycStep
+                  darkMode={props.darkMode}
+                  onramp={props.onramp}
+                  kycLevel={props.kycLevel}
+                  verifications={props.verifications}
+                  providedFields={props.providedFields}
+                  polling={props.polling}
+                  loading={props.loading}
+                  country={kycCountry}
+                  onComplete={() => goTo(2)}
+                  onRefreshKycLevel={props.onRefreshKycLevel}
+                  setError={props.setError}
+                  log={props.log}
+                />
+              </Stack>
+            );
+          }
+
+          if (!kycCountry) {
+            return (
+              <Stack spacing={3}>
+                <Box>
+                  <Typography
+                    sx={{ color: colors.textPrimary, fontSize: "1.5rem", fontWeight: 700, mb: 0.5 }}
+                  >
+                    Verify Your Identity
+                  </Typography>
+                  <Typography sx={{ color: colors.textSecondary, fontSize: "0.9rem" }}>
+                    Select your country of residence to continue
+                  </Typography>
+                </Box>
+                {countrySelector}
+              </Stack>
+            );
+          }
+
+          // US selected — fall through to US form below, but show country selector
+        }
+
         const chip = KYC_CHIP[props.kycLevel];
         const showFull =
           props.kycLevel === "REQUIRES_KYC" || props.kycLevel === "REJECTED";
@@ -466,6 +558,25 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
 
         return (
           <Stack spacing={3}>
+            {!props.kycRegion && (
+              <TextField
+                select
+                label="Country of residence"
+                value={kycCountry}
+                onChange={(e) => setKycCountry(e.target.value)}
+                size="small"
+                fullWidth
+                sx={inputSx}
+              >
+                <MenuItem value="US">United States (US)</MenuItem>
+                <MenuItem disabled sx={{ fontSize: "0.75rem", opacity: 0.5 }}>── EU / EEA ──</MenuItem>
+                {Array.from(EU_COUNTRIES).sort().map((code) => (
+                  <MenuItem key={code} value={code}>
+                    {EU_COUNTRY_NAMES[code] ?? code} ({code})
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <Box>
               <Typography
                 sx={{

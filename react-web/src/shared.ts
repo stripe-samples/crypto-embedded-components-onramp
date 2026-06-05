@@ -6,6 +6,15 @@ export const NETWORKS_TEST: CryptoNetwork[] = ["solana", "base"];
 export const getNetworks = (livemode: boolean): CryptoNetwork[] =>
   livemode ? NETWORKS_LIVE : NETWORKS_TEST;
 
+export const EU_COUNTRIES = new Set([
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR",
+  "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL",
+  "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS",
+]);
+
+export const isEuCountry = (code: string): boolean =>
+  EU_COUNTRIES.has(code.toUpperCase());
+
 export const EXPLORER_URLS: Record<
   string,
   Record<string, (txId: string) => string>

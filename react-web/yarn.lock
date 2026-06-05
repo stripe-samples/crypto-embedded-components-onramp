@@ -1920,10 +1920,10 @@
   dependencies:
     "@sinonjs/commons" "^1.7.0"
 
-"@stripe/crypto@^1.0.2":
-  version "1.0.2"
-  resolved "https://registry.yarnpkg.com/@stripe/crypto/-/crypto-1.0.2.tgz#e90be2ce3b4ef31961160b081322fde214025278"
-  integrity sha512-lLlNoXkyZEwtHv4+4TRbHLlk3trbAyHVmJKgV05qfgD0bHr7pH0h3Qf4yQp7Kj+/wt00mPU3I1m69z80WvNp9w==
+"@stripe/crypto@1.1.0":
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/@stripe/crypto/-/crypto-1.1.0.tgz#f2770337fba49caf9c2b49e7e3e6f62b70177ff5"
+  integrity sha512-zkKqcyf5QuXhU3el2Af4rAMi+79EERX3DbFHd7RjryFez+nTw5p+o/4H+m5v90bVWTZ85cLxEWifdawaABBR6w==
 
 "@stripe/stripe-js@^9.0.1":
   version "9.1.0"

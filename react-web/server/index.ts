@@ -280,34 +280,56 @@ app.get("/api/crypto/customers/:customerId", async (req, res) => {
         headers: {
           Authorization: getBasicAuth(secretKey),
           "Stripe-OAuth-Token": accessToken,
+          "Stripe-Feature": "identifier_type_lifecycle=v1",
+          "Stripe-Version": "2025-05-28.preview;crypto_onramp_beta=v2",
         },
       },
     );
     const data = response.data;
     const verifications: Array<{ name: string; status: string }> =
       data.verifications || [];
-    const providedFields = data.provided_fields;
-    const isVerified = (name: string) =>
-      verifications.some((v) => v.name === name && v.status === "verified");
+    const providedFields = data.provided_fields || [];
+    const kycRegion = data.kyc_region ?? null;
+    const kycTiers = data.kyc_tiers ?? [];
 
-    if (verifications.some((v) => v.status === "pending")) {
-      return res.json({ kyc_level: "PENDING" });
-    }
-    if (verifications.every((v) => v.status === "not_started")) {
-      return res.json({ kyc_level: "REQUIRES_KYC" });
-    }
-    if (isVerified("kyc_verified") && isVerified("id_document_verified")) {
-      return res.json({ kyc_level: "L2" });
+    console.log("[KYC Raw API Response]", JSON.stringify(data, null, 2));
+    console.log("[KYC Debug]", JSON.stringify({
+      customerId,
+      kyc_region: kycRegion,
+      kyc_tiers: kycTiers,
+      verifications,
+      provided_fields: providedFields,
+    }, null, 2));
+
+    // Derive kyc_level from kyc_tiers (canonical source) with verifications as fallback
+    let kyc_level: string;
+    const getTierStatus = (tier: string) =>
+      kycTiers.find((t: any) => t.tier === tier)?.verification_status;
+
+    if (getTierStatus("l2") === "verified") {
+      kyc_level = "L2";
+    } else if (getTierStatus("l1") === "verified") {
+      kyc_level = "L1";
+    } else if (getTierStatus("l0") === "verified") {
+      kyc_level = "L0";
+    } else if (kycTiers.some((t: any) => t.verification_status === "pending")) {
+      kyc_level = "PENDING";
     } else if (
-      isVerified("kyc_verified") &&
-      providedFields.includes("id_number")
+      kycTiers.length === 0 ||
+      kycTiers.every((t: any) => t.verification_status === "not_started" || t.verification_status === "not_available")
     ) {
-      return res.json({ kyc_level: "L1" });
-    } else if (isVerified("phone_verified")) {
-      return res.json({ kyc_level: "L0" });
+      kyc_level = "REQUIRES_KYC";
     } else {
-      return res.json({ kyc_level: "REJECTED" });
+      kyc_level = "REJECTED";
     }
+
+    return res.json({
+      kyc_level,
+      kyc_region: kycRegion,
+      kyc_tiers: kycTiers,
+      verifications,
+      provided_fields: providedFields,
+    });
   } catch (error: any) {
     console.error(
       "Error fetching crypto customer:",
