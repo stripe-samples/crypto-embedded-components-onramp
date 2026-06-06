@@ -14,12 +14,34 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { Dayjs } from "dayjs";
-import type {
-  OnrampCoordinator,
-  IdentifierRequirements,
-  UpdateKycResult,
-  Identifier,
-} from "@stripe/crypto";
+import type { OnrampCoordinator } from "@stripe/crypto";
+
+type Identifier = { type: string; value: string };
+
+type IdentifierRequirements = {
+  carf_tin_required: boolean;
+  identifiers: Array<{ type: string }>;
+  alternatives: Array<{
+    original_missing_identifiers: string[];
+    alternative_missing_identifiers: string[];
+  }>;
+};
+
+type UpdateKycResult = {
+  completed: boolean;
+  carf_tin_required: boolean;
+  identifiers: Array<{ type: string }>;
+  alternatives: Array<{
+    original_missing_identifiers: string[];
+    alternative_missing_identifiers: string[];
+  }>;
+  invalid_identifiers: string[];
+};
+
+type EuOnrampCoordinator = OnrampCoordinator & {
+  getMissingIdentifiers: () => Promise<IdentifierRequirements>;
+  updateKycInfo: (identifiers: Identifier[]) => Promise<UpdateKycResult>;
+};
 import { getTheme } from "./theme";
 import { EU_COUNTRIES } from "./shared";
 import {
@@ -82,6 +104,7 @@ function determineInitialSubStep(
 }
 
 export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
+  const onramp = props.onramp as EuOnrampCoordinator;
   const t = getTheme(props.darkMode);
   const colors = t.colors;
   const { inputSx, accentButtonSx } = t;
@@ -161,7 +184,7 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
     props.setError(null);
     try {
       props.log("EU KYC: Getting missing identifiers...");
-      const result = await props.onramp.getMissingIdentifiers();
+      const result = await onramp.getMissingIdentifiers();
       props.log("EU KYC: Missing identifiers received", `carf_required=${result.carf_tin_required}, mica_count=${result.identifiers.length}`);
       setRequirements(result);
     } catch (e: any) {
@@ -205,7 +228,7 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
 
     try {
       props.log("EU KYC: Submitting identifiers", `count=${identifiers.length}`);
-      const result: UpdateKycResult = await props.onramp.updateKycInfo(identifiers);
+      const result: UpdateKycResult = await onramp.updateKycInfo(identifiers);
       props.log("EU KYC: Identifiers result", `completed=${result.completed}`);
 
       if (result.invalid_identifiers.length > 0) {
