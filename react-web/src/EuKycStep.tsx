@@ -110,6 +110,11 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
   const [taxCountryInput, setTaxCountryInput] = useState("");
   const [identifierValues, setIdentifierValues] = useState<Record<string, string>>({});
   const [invalidIdentifiers, setInvalidIdentifiers] = useState<string[]>([]);
+  const [alternativeChoices, setAlternativeChoices] = useState<Record<string, string>>({});
+
+  // Attestation
+  const attestationRef = useRef<HTMLDivElement>(null);
+  const [attestationMounted, setAttestationMounted] = useState(false);
 
 
   const { kycLevel, providedFields, onComplete } = props;
@@ -228,41 +233,31 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
     }
   }, [props, requirements, identifierValues, taxCountries]);
 
-  // TODO: Attestation step is disabled until crs-carf-declaration.html gets a
-  // frame-ancestors CSP exception in cdn_security_headers.yaml (same treatment
-  // as authentication-element.html). See EXCEPTION-8025.
-  // Once the CDN config is updated, uncomment this and remove the auto-advance below.
-  //
-  // const handleAttestation = useCallback(async () => {
-  //   setSubmitting(true);
-  //   props.setError(null);
-  //   try {
-  //     props.log("EU KYC: Presenting attestation...");
-  //     const element = await props.onramp.promptUserAttestation(
-  //       "eu_carf",
-  //       ({ result }) => {
-  //         props.log("EU KYC: Attestation result", result);
-  //         if (result === "confirmed") {
-  //           setSubStep("verifyDocs");
-  //         } else {
-  //           props.setError("Attestation was not confirmed. Please try again.");
-  //         }
-  //         setSubmitting(false);
-  //       },
-  //     );
-  //     if (attestationRef.current) {
-  //       attestationRef.current.replaceChildren(element);
-  //     }
-  //   } catch (e: any) {
-  //     props.setError(`Attestation error: ${e?.message || e}`);
-  //     setSubmitting(false);
-  //   }
-  // }, [props]);
-
-  useEffect(() => {
-    if (subStep === "attestation") {
-      props.log("EU KYC: Skipping attestation (CSP not yet configured), advancing to verifyDocs");
-      setSubStep("verifyDocs");
+  const handleAttestation = useCallback(async () => {
+    setSubmitting(true);
+    props.setError(null);
+    try {
+      props.log("EU KYC: Presenting attestation...");
+      const element = await props.onramp.promptUserAttestation(
+        "eu_carf",
+        ({ result }) => {
+          props.log("EU KYC: Attestation result", result);
+          if (result === "confirmed") {
+            setSubStep("verifyDocs");
+          } else {
+            props.setError("Attestation was not confirmed. Please try again.");
+          }
+          setSubmitting(false);
+        },
+      );
+      if (attestationRef.current) {
+        attestationRef.current.replaceChildren(element);
+        setAttestationMounted(true);
+        setSubmitting(false);
+      }
+    } catch (e: any) {
+      props.setError(`Attestation error: ${e?.message || e}`);
+      setSubmitting(false);
     }
   }, [subStep, props]);
 
@@ -579,7 +574,33 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
         </>
       )}
 
-      {/* ═══ Attestation (skipped — auto-advances to verifyDocs) ═══ */}
+      {/* ═══ Attestation ═══ */}
+      {subStep === "attestation" && (
+        <Stack spacing={2}>
+          <Typography sx={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+            Review and accept the Terms of Service to continue.
+          </Typography>
+          <Box
+            ref={attestationRef}
+            sx={{
+              minHeight: attestationMounted ? undefined : 200,
+              width: "100%",
+              "& iframe": { border: "none", width: "100%", minHeight: 300 },
+            }}
+          />
+          {!attestationMounted && (
+            <Button
+              variant="contained"
+              onClick={handleAttestation}
+              disabled={submitting}
+              fullWidth
+              sx={accentButtonSx}
+            >
+              {submitting ? <CircularProgress size={20} sx={{ color: "#fff" }} /> : "Present Terms of Service"}
+            </Button>
+          )}
+        </Stack>
+      )}
 
       {/* ═══ Verify Documents ═══ */}
       {subStep === "verifyDocs" && (
