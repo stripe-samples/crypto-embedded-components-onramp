@@ -281,7 +281,7 @@ app.get("/api/crypto/customers/:customerId", async (req, res) => {
           Authorization: getBasicAuth(secretKey),
           "Stripe-OAuth-Token": accessToken,
           "Stripe-Feature": "identifier_type_lifecycle=v1",
-          "Stripe-Version": "2025-05-28.preview;crypto_onramp_beta=v2",
+          "Stripe-Version": "2026-03-25.dahlia;crypto_onramp_beta=v2",
         },
       },
     );

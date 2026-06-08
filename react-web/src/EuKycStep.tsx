@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
   MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -27,7 +30,7 @@ import {
   EU_COUNTRY_NAMES,
   getIdentifierLabel,
 } from "./euIdentifiers";
-import type { KycLevel, Verification } from "./types";
+import type { KycLevel } from "./types";
 
 type EuKycSubStep = "basicInfo" | "identifiers" | "attestation" | "verifyDocs";
 
@@ -35,7 +38,6 @@ export type EuKycStepProps = {
   darkMode: boolean;
   onramp: OnrampCoordinator;
   kycLevel: KycLevel;
-  verifications: Verification[];
   providedFields: string[];
   polling: boolean;
   loading: boolean;
@@ -54,27 +56,21 @@ function isEuKycComplete(providedFields: string[]): boolean {
 }
 
 function determineInitialSubStep(
-  verifications: Verification[],
+  kycLevel: KycLevel,
   providedFields: string[],
 ): EuKycSubStep {
   const hasIdentifiers = providedFields.includes("identifiers");
   const hasAttestation = providedFields.includes("attestation");
 
-  // Attestation submitted → only document verification remains
   if (hasIdentifiers && hasAttestation) {
     return "verifyDocs";
   }
 
-  // Identifiers submitted → attestation is next (currently auto-skips to verifyDocs)
   if (hasIdentifiers) {
     return "attestation";
   }
 
-  const kycVerified = verifications.some(
-    (v) => v.name === "kyc_verified" && v.status === "verified",
-  );
-
-  if (kycVerified) {
+  if (kycLevel === "PENDING" || kycLevel === "L1" || kycLevel === "L2" || kycLevel === "REJECTED") {
     return "identifiers";
   }
 
@@ -87,7 +83,7 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
   const { inputSx, accentButtonSx } = t;
 
   const [subStep, setSubStep] = useState<EuKycSubStep>(() =>
-    determineInitialSubStep(props.verifications, props.providedFields),
+    determineInitialSubStep(props.kycLevel, props.providedFields),
   );
   const [submitting, setSubmitting] = useState(false);
 
@@ -110,6 +106,10 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
   const [taxCountryInput, setTaxCountryInput] = useState("");
   const [identifierValues, setIdentifierValues] = useState<Record<string, string>>({});
   const [invalidIdentifiers, setInvalidIdentifiers] = useState<string[]>([]);
+  const [alternativeChoices, setAlternativeChoices] = useState<Record<string, string>>({});
+
+  // Attestation
+  const attestationRef = useRef<HTMLDivElement>(null);
 
 
   const { kycLevel, providedFields, onComplete } = props;
@@ -184,11 +184,12 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
 
     const identifiers: Identifier[] = [];
 
-    // MiCA identifiers
+    // MiCA identifiers (use chosen alternative type if user selected one)
     if (requirements) {
       for (const id of requirements.identifiers) {
-        const val = identifierValues[id.type];
-        if (val) identifiers.push({ type: id.type, value: val } as Identifier);
+        const chosenType = alternativeChoices[id.type] ?? id.type;
+        const val = identifierValues[chosenType];
+        if (val) identifiers.push({ type: chosenType, value: val } as Identifier);
       }
     }
 
@@ -226,45 +227,33 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
     } finally {
       setSubmitting(false);
     }
-  }, [props, requirements, identifierValues, taxCountries]);
+  }, [props, requirements, identifierValues, taxCountries, alternativeChoices]);
 
-  // TODO: Attestation step is disabled until crs-carf-declaration.html gets a
-  // frame-ancestors CSP exception in cdn_security_headers.yaml (same treatment
-  // as authentication-element.html). See EXCEPTION-8025.
-  // Once the CDN config is updated, uncomment this and remove the auto-advance below.
-  //
-  // const handleAttestation = useCallback(async () => {
-  //   setSubmitting(true);
-  //   props.setError(null);
-  //   try {
-  //     props.log("EU KYC: Presenting attestation...");
-  //     const element = await props.onramp.promptUserAttestation(
-  //       "eu_carf",
-  //       ({ result }) => {
-  //         props.log("EU KYC: Attestation result", result);
-  //         if (result === "confirmed") {
-  //           setSubStep("verifyDocs");
-  //         } else {
-  //           props.setError("Attestation was not confirmed. Please try again.");
-  //         }
-  //         setSubmitting(false);
-  //       },
-  //     );
-  //     if (attestationRef.current) {
-  //       attestationRef.current.replaceChildren(element);
-  //     }
-  //   } catch (e: any) {
-  //     props.setError(`Attestation error: ${e?.message || e}`);
-  //     setSubmitting(false);
-  //   }
-  // }, [props]);
-
-  useEffect(() => {
-    if (subStep === "attestation") {
-      props.log("EU KYC: Skipping attestation (CSP not yet configured), advancing to verifyDocs");
-      setSubStep("verifyDocs");
+  const handleAttestation = useCallback(async () => {
+    setSubmitting(true);
+    props.setError(null);
+    try {
+      props.log("EU KYC: Presenting attestation...");
+      const element = await props.onramp.promptUserAttestation(
+        "eu_carf",
+        ({ result }) => {
+          props.log("EU KYC: Attestation result", result);
+          if (result === "confirmed") {
+            setSubStep("verifyDocs");
+          } else {
+            props.setError("Attestation was not confirmed. Please try again.");
+          }
+          setSubmitting(false);
+        },
+      );
+      if (attestationRef.current) {
+        attestationRef.current.replaceChildren(element);
+      }
+    } catch (e: any) {
+      props.setError(`Attestation error: ${e?.message || e}`);
+      setSubmitting(false);
     }
-  }, [subStep, props]);
+  }, [props]);
 
   const handleVerifyDocuments = useCallback(async () => {
     setSubmitting(true);
@@ -527,26 +516,61 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
                     <Typography sx={{ color: colors.textMuted, fontSize: "0.7rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
                       Required National Identifiers (MiCA)
                     </Typography>
-                    {unsatisfiedMica.map((id) => (
-                      <TextField
-                        key={id.type}
-                        label={getIdentifierLabel(id.type)}
-                        value={identifierValues[id.type] ?? ""}
-                        onChange={(e) => setIdentifierValues({ ...identifierValues, [id.type]: e.target.value })}
-                        size="small"
-                        fullWidth
-                        error={invalidIdentifiers.includes(id.type)}
-                        helperText={invalidIdentifiers.includes(id.type) ? "Invalid format" : undefined}
-                        sx={inputSx}
-                      />
-                    ))}
-                    {requirements.alternatives.length > 0 && (
-                      <Typography sx={{ color: colors.textSecondary, fontSize: "0.75rem", fontStyle: "italic" }}>
-                        Alternative identifiers accepted: {requirements.alternatives.map((a) =>
-                          `${a.original_missing_identifiers.join("/")} can be replaced with ${a.alternative_missing_identifiers.join("/")}`
-                        ).join("; ")}
-                      </Typography>
-                    )}
+                    {unsatisfiedMica.map((id) => {
+                      const alt = requirements.alternatives.find((a) =>
+                        a.original_missing_identifiers.includes(id.type)
+                      );
+                      const chosenType = alternativeChoices[id.type] ?? id.type;
+
+                      if (alt) {
+                        const options = [id.type, ...alt.alternative_missing_identifiers];
+                        return (
+                          <Stack key={id.type} spacing={1}>
+                            <Typography sx={{ color: colors.textSecondary, fontSize: "0.8rem" }}>
+                              Choose identifier type:
+                            </Typography>
+                            <RadioGroup
+                              value={chosenType}
+                              onChange={(e) => setAlternativeChoices({ ...alternativeChoices, [id.type]: e.target.value })}
+                            >
+                              {options.map((opt) => (
+                                <FormControlLabel
+                                  key={opt}
+                                  value={opt}
+                                  control={<Radio size="small" sx={{ color: colors.accent, "&.Mui-checked": { color: colors.accent } }} />}
+                                  label={getIdentifierLabel(opt)}
+                                  sx={{ "& .MuiFormControlLabel-label": { fontSize: "0.85rem", color: colors.textPrimary } }}
+                                />
+                              ))}
+                            </RadioGroup>
+                            <TextField
+                              label={getIdentifierLabel(chosenType)}
+                              value={identifierValues[chosenType] ?? ""}
+                              onChange={(e) => setIdentifierValues({ ...identifierValues, [chosenType]: e.target.value })}
+                              size="small"
+                              fullWidth
+                              error={invalidIdentifiers.includes(chosenType)}
+                              helperText={invalidIdentifiers.includes(chosenType) ? "Invalid format" : undefined}
+                              sx={inputSx}
+                            />
+                          </Stack>
+                        );
+                      }
+
+                      return (
+                        <TextField
+                          key={id.type}
+                          label={getIdentifierLabel(id.type)}
+                          value={identifierValues[id.type] ?? ""}
+                          onChange={(e) => setIdentifierValues({ ...identifierValues, [id.type]: e.target.value })}
+                          size="small"
+                          fullWidth
+                          error={invalidIdentifiers.includes(id.type)}
+                          helperText={invalidIdentifiers.includes(id.type) ? "Invalid format" : undefined}
+                          sx={inputSx}
+                        />
+                      );
+                    })}
                   </>
                 );
               })()}
@@ -579,7 +603,24 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
         </>
       )}
 
-      {/* ═══ Attestation (skipped — auto-advances to verifyDocs) ═══ */}
+      {/* ═══ Attestation ═══ */}
+      {subStep === "attestation" && (
+        <Stack spacing={2}>
+          <Typography sx={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+            Review and accept the Terms of Service to continue.
+          </Typography>
+          <Box ref={attestationRef} sx={{ minHeight: 200 }} />
+          <Button
+            variant="contained"
+            onClick={handleAttestation}
+            disabled={submitting}
+            fullWidth
+            sx={accentButtonSx}
+          >
+            {submitting ? <CircularProgress size={20} sx={{ color: "#fff" }} /> : "Present Terms of Service"}
+          </Button>
+        </Stack>
+      )}
 
       {/* ═══ Verify Documents ═══ */}
       {subStep === "verifyDocs" && (

@@ -25,7 +25,7 @@ import type { KycInfo, CryptoNetwork, OnrampCoordinator } from "@stripe/crypto";
 import { getTheme } from "./theme";
 import { EXPLORER_URLS, getNetworks, isEuCountry, EU_COUNTRIES } from "./shared";
 import { EU_COUNTRY_NAMES } from "./euIdentifiers";
-import type { AccountStatus, KycLevel, KycRegion, Verification, Wallet, OnrampSession } from "./types";
+import type { AccountStatus, KycLevel, KycRegion, Wallet, OnrampSession } from "./types";
 import { EuKycStep } from "./EuKycStep";
 
 export type WizardViewProps = {
@@ -39,7 +39,6 @@ export type WizardViewProps = {
   linkAuthIntentId: string | null | undefined;
   kycLevel: KycLevel;
   kycRegion: KycRegion;
-  verifications: Verification[];
   providedFields: string[];
   onramp: OnrampCoordinator;
   cryptoPaymentToken: string | null | undefined;
@@ -531,7 +530,6 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               darkMode={props.darkMode}
               onramp={props.onramp}
               kycLevel={props.kycLevel}
-              verifications={props.verifications}
               providedFields={props.providedFields}
               polling={props.polling}
               loading={props.loading}
@@ -574,7 +572,6 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                   darkMode={props.darkMode}
                   onramp={props.onramp}
                   kycLevel={props.kycLevel}
-                  verifications={props.verifications}
                   providedFields={props.providedFields}
                   polling={props.polling}
                   loading={props.loading}

@@ -22,7 +22,7 @@ import type {
 } from "@stripe/crypto";
 import { loadCryptoOnrampAndInitialize } from "@stripe/crypto";
 import { LinkAuthenticationModal } from "./LinkAuthenticationModal";
-import type { AccountStatus, KycLevel, KycRegion, Verification } from "./types";
+import type { AccountStatus, KycLevel, KycRegion } from "./types";
 
 function timestamp(): string {
   return new Date().toLocaleTimeString(undefined, {
@@ -116,7 +116,6 @@ const ExampleAppInner: React.FC<{
   );
   const [kycLevel, setKYCLevel] = useState<KycLevel>("REQUIRES_KYC");
   const [kycRegion, setKycRegion] = useState<KycRegion>(null);
-  const [verifications, setVerifications] = useState<Verification[]>([]);
   const [providedFields, setProvidedFields] = useState<string[]>([]);
   const [cryptoCustomerId, setCryptoCustomerId] = useState<
     string | null | undefined
@@ -173,7 +172,6 @@ const ExampleAppInner: React.FC<{
         "L1",
         "L2",
         "REJECTED",
-        "PENDING",
       ]);
       setPolling(true);
       setError(null);
@@ -196,15 +194,13 @@ const ExampleAppInner: React.FC<{
           if (json.kyc_region !== undefined) {
             setKycRegion(json.kyc_region);
           }
-          if (json.verifications) {
-            setVerifications(json.verifications);
-          }
           if (json.provided_fields) {
             setProvidedFields(json.provided_fields);
           }
           log(`KYC Level: ${level}${json.kyc_region ? `, Region: ${json.kyc_region}` : ""}`);
           setKYCLevel(level);
           if (terminalStates.has(level)) break;
+          if (level === "PENDING" && json.kyc_region === "eu") break;
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       } catch (e) {
@@ -723,7 +719,6 @@ const ExampleAppInner: React.FC<{
             linkAuthIntentId={linkAuthIntentId}
             kycLevel={kycLevel}
             kycRegion={kycRegion}
-            verifications={verifications}
             providedFields={providedFields}
             onramp={onramp}
             cryptoPaymentToken={cryptoPaymentToken}
