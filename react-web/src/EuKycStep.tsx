@@ -93,6 +93,7 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
   const [line1, setLine1] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [addressState, setAddressState] = useState("");
   const [country, setCountry] = useState(props.country ?? "");
   const [dob, setDOB] = useState<Dayjs | null>(null);
   const [nationalities, setNationalities] = useState<string[]>([]);
@@ -142,6 +143,7 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
           line1,
           city,
           postal_code: postalCode,
+          ...(addressState ? { state: addressState } : {}),
           country,
         },
         nationalities,
@@ -155,7 +157,7 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
     } finally {
       setSubmitting(false);
     }
-  }, [props, givenName, surname, dob, line1, city, postalCode, country, nationalities, birthCity, birthCountry]);
+  }, [props, givenName, surname, dob, line1, city, postalCode, addressState, country, nationalities, birthCity, birthCountry]);
 
   const handleGetMissingIdentifiers = useCallback(async () => {
     setSubmitting(true);
@@ -212,6 +214,11 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
 
       if (result.invalid_identifiers.length > 0) {
         setInvalidIdentifiers(result.invalid_identifiers);
+        setRequirements({
+          carf_tin_required: result.carf_tin_required,
+          identifiers: result.identifiers,
+          alternatives: result.alternatives ?? [],
+        });
         props.setError(`Invalid identifiers: ${result.invalid_identifiers.map(getIdentifierLabel).join(", ")}`);
       } else if (result.completed) {
         setSubStep("attestation");
@@ -357,6 +364,9 @@ export const EuKycStep: React.FC<EuKycStepProps> = (props) => {
             <TextField label="City" value={city} onChange={(e) => setCity(e.target.value)} size="small" fullWidth sx={inputSx} />
             <TextField label="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} size="small" sx={{ ...inputSx, maxWidth: 140 }} />
           </Stack>
+          {country === "IE" && (
+            <TextField label="State" value={addressState} onChange={(e) => setAddressState(e.target.value)} size="small" fullWidth sx={inputSx} />
+          )}
           {!props.country && (
             <TextField
               select
