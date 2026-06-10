@@ -88,8 +88,12 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
 
       <Text style={styles.title}>Add your personal info</Text>
       <Text style={styles.description}>
-        Next, Link needs to collect a few personal details to verify your
-        identity. This information is not shared with {MERCHANT_DISPLAY_NAME}.{' '}
+        {isEu
+          ? `EU regulations (CRS/CARF and MiCA) require additional verification ` +
+            `before you can purchase crypto. This information is handled by ` +
+            `Link / Stripe, not ${MERCHANT_DISPLAY_NAME}. `
+          : `Next, Link needs to collect a few personal details to verify your ` +
+            `identity. This information is not shared with ${MERCHANT_DISPLAY_NAME}. `}
         <Text
           style={styles.link}
           onPress={() =>

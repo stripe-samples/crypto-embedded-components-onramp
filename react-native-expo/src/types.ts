@@ -33,13 +33,17 @@ export interface PaymentToken {
 
 export type RootStackParamList = {
   Home: undefined;
-  /** Demo configuration: KYC tier and limit source. */
+  /** Demo configuration: KYC tier, limit source, and KYC region. */
   Settings: undefined;
   Auth: undefined;
   Register: { email: string; authToken: string };
   KYCPrimer: { customerId: string; authToken: string; registrationCountry?: string };
   KYC: { customerId: string; authToken: string };
   EuKyc: { customerId: string; authToken: string; country?: string };
+  EuKYC: { customerId: string; authToken: string };
+  EuIdentifiers: { customerId: string; authToken: string };
+  EuAttestation: { customerId: string; authToken: string };
+  EuVerifyDocs: { customerId: string; authToken: string };
   Address: {
     customerId: string;
     authToken: string;

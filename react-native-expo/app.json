@@ -25,7 +25,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.stripe.CryptoOnrampExample",
       "entitlements": {
-        "com.apple.developer.devicecheck.appattest-environment": "development"
+        "com.apple.developer.devicecheck.appattest-environment": "production"
       },
       "infoPlist": {
         "NSAppTransportSecurity": {

@@ -11,6 +11,10 @@ import RegisterScreen from '../screens/RegisterScreen';
 import KYCPrimerScreen from '../screens/KYCPrimerScreen';
 import KYCScreen from '../screens/KYCScreen';
 import AddressScreen from '../screens/AddressScreen';
+import EuKYCScreen from '../screens/EuKYCScreen';
+import EuIdentifiersScreen from '../screens/EuIdentifiersScreen';
+import EuAttestationScreen from '../screens/EuAttestationScreen';
+import EuVerifyDocsScreen from '../screens/EuVerifyDocsScreen';
 import WalletScreen from '../screens/WalletScreen';
 import PaymentMethodScreen from '../screens/PaymentMethodScreen';
 import KYCStepUpScreen from '../screens/KYCStepUpScreen';
@@ -42,6 +46,10 @@ export default function AppNavigator() {
           <Stack.Screen name="KYC" component={KYCScreen} options={{ title: 'Personal Info' }} />
           <Stack.Screen name="EuKyc" component={EuKycScreen} options={{ title: 'EU Identity Verification' }} />
           <Stack.Screen name="Address" component={AddressScreen} options={{ title: 'Home Address' }} />
+          <Stack.Screen name="EuKYC" component={EuKYCScreen} options={{ title: 'EU Identity Info' }} />
+          <Stack.Screen name="EuIdentifiers" component={EuIdentifiersScreen} options={{ title: 'Tax & National IDs' }} />
+          <Stack.Screen name="EuAttestation" component={EuAttestationScreen} options={{ title: 'Terms of Service' }} />
+          <Stack.Screen name="EuVerifyDocs" component={EuVerifyDocsScreen} options={{ title: 'Document Verification' }} />
           <Stack.Screen name="Wallet" component={WalletScreen} options={{ title: 'Add Wallet' }} />
           <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} options={{ title: 'Payment' }} />
           <Stack.Screen
