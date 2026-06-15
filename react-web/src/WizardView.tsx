@@ -210,6 +210,8 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // Step 2: Wallets
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loadingWallets, setLoadingWallets] = useState(false);
+  const [hasMoreWallets, setHasMoreWallets] = useState(false);
+  const [loadingMoreWallets, setLoadingMoreWallets] = useState(false);
   const [newAddr, setNewAddr] = useState("");
   const [newNet, setNewNet] = useState<CryptoNetwork>("solana");
   const [adding, setAdding] = useState(false);
@@ -404,16 +406,29 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
 
   // ─── Wallet fetch ─────────────────────────────────────
 
-  const fetchWallets = useCallback(async () => {
+  const fetchWallets = useCallback(async (startingAfter?: string) => {
     if (!cryptoCustomerId || !linkAuthIntentId) return;
-    setLoadingWallets(true);
+    if (startingAfter) {
+      setLoadingMoreWallets(true);
+    } else {
+      setLoadingWallets(true);
+    }
     try {
+      const qs = new URLSearchParams({
+        lai: encodeURIComponent(linkAuthIntentId),
+        livemode: String(livemode),
+        limit: "20",
+      });
+      if (startingAfter) qs.append("starting_after", startingAfter);
+
       const r = await fetch(
-        `/api/crypto/customers/${cryptoCustomerId}/wallets?lai=${encodeURIComponent(linkAuthIntentId)}&livemode=${livemode}`,
+        `/api/crypto/customers/${cryptoCustomerId}/wallets?${qs.toString()}`,
       );
       if (r.ok) {
         const d = await r.json();
-        setWallets(d.data ?? []);
+        const newWallets: Wallet[] = d.data ?? [];
+        setWallets((prev) => startingAfter ? [...prev, ...newWallets] : newWallets);
+        setHasMoreWallets(d.has_more ?? false);
       } else {
         const d = await r.json().catch(() => null);
         setError(`Failed to load wallets: ${d?.error ?? `HTTP ${r.status}`}`);
@@ -422,6 +437,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
       setError(`Failed to load wallets: ${e?.message || e}`);
     }
     setLoadingWallets(false);
+    setLoadingMoreWallets(false);
   }, [cryptoCustomerId, linkAuthIntentId, livemode, setError]);
 
   useEffect(() => {
@@ -1157,6 +1173,24 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                     </Box>
                   );
                 })}
+                {hasMoreWallets && (
+                  <Button
+                    size="small"
+                    onClick={() => fetchWallets(wallets[wallets.length - 1]?.id)}
+                    disabled={loadingMoreWallets}
+                    sx={{
+                      color: colors.accent,
+                      fontSize: "0.8rem",
+                      textTransform: "none",
+                      mt: 0.5,
+                    }}
+                  >
+                    {loadingMoreWallets ? (
+                      <CircularProgress size={16} sx={{ color: colors.accent, mr: 1 }} />
+                    ) : null}
+                    {loadingMoreWallets ? "Loading..." : "Load More"}
+                  </Button>
+                )}
               </Stack>
             )}
 

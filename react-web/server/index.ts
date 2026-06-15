@@ -346,8 +346,13 @@ app.get("/api/crypto/customers/:customerId/wallets", async (req, res) => {
       return res.status(404).json({ error: "Access Token Not Found." });
     }
 
+    const params = new URLSearchParams();
+    if (req.query.limit) params.append("limit", req.query.limit as string);
+    if (req.query.starting_after) params.append("starting_after", req.query.starting_after as string);
+    const qs = params.toString();
+
     const response = await axios.get(
-      `https://api.stripe.com/v1/crypto/customers/${customerId}/crypto_consumer_wallets`,
+      `https://api.stripe.com/v1/crypto/customers/${customerId}/crypto_consumer_wallets${qs ? `?${qs}` : ""}`,
       {
         headers: {
           Authorization: getBasicAuth(secretKey),
