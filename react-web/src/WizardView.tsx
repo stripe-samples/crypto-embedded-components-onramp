@@ -33,6 +33,7 @@ import { EXPLORER_URLS, getNetworks, isEuCountry, EU_COUNTRIES } from "./shared"
 import { EU_COUNTRY_NAMES } from "./euIdentifiers";
 import type { AccountStatus, KycLevel, KycRegion, Wallet, OnrampSession, CheckoutError } from "./types";
 import { EuKycStep } from "./EuKycStep";
+import { WalletOwnershipVerificationPanel } from "./WalletOwnershipVerificationPanel";
 
 export type WizardViewProps = {
   darkMode: boolean;
@@ -1327,72 +1328,37 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               </Button>
             </Stack>
             {walletVerifPhase === 'signing' && walletChallenge && (
-              <Stack spacing={2} sx={{ pt: 1 }}>
-                <Divider sx={{ borderColor: colors.borderSubtle }} />
-                <Typography sx={{ color: colors.textPrimary, fontSize: '1rem', fontWeight: 700 }}>
-                  EU Travel Rule — Verify Wallet Ownership
-                </Typography>
-                <Typography sx={{ color: colors.textSecondary, fontSize: '0.85rem' }}>
-                  Sign the challenge message below with your wallet, then paste the signature.
-                </Typography>
-                <TextField
-                  label="Challenge Message"
-                  value={walletChallenge.message}
-                  size="small"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  InputProps={{ readOnly: true }}
-                  sx={{ ...inputSx, fontFamily: 'monospace', fontSize: '0.75rem' }}
-                />
-                <Box sx={{ bgcolor: '#141f14', borderRadius: 1, p: 1.5, border: '1px solid #1e3a1e' }}>
-                  <Typography sx={{ color: '#22c55e', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, mb: 0.5 }}>
-                    Test mode
-                  </Typography>
-                  <Typography sx={{ color: '#777', fontSize: '0.8rem' }}>
-                    Use <Box component="span" sx={{ fontFamily: 'monospace', color: '#aaa' }}>abcd</Box> as the signature to bypass verification in test mode (pre-filled).
-                  </Typography>
-                </Box>
-                <TextField
-                  label="Signature"
-                  value={walletSig}
-                  onChange={(e) => setWalletSig(e.target.value)}
-                  size="small"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  placeholder="Paste your wallet signature here"
-                  sx={inputSx}
-                />
-                <Button
-                  variant="contained"
-                  onClick={async () => {
-                    if (!walletChallenge || !pendingWalletInfo) return;
-                    setVerifyingWallet(true);
-                    props.setError(null);
-                    try {
-                      props.log('EU Travel Rule: Submitting wallet ownership signature', `challengeId=${walletChallenge.challengeId}`);
-                      await props.onramp.submitWalletOwnershipSignature({ challengeId: walletChallenge.challengeId, signature: walletSig });
-                      props.log('EU Travel Rule: Wallet ownership verified');
-                      setWalletVerifPhase('idle');
-                      setWalletChallenge(null);
-                      setWalletSig('');
-                      setNewAddr('');
-                      setPendingWalletInfo(null);
-                      await fetchWallets();
-                    } catch (e: any) {
-                      props.setError(`Wallet ownership verification failed: ${e?.message || e}`);
-                    } finally {
-                      setVerifyingWallet(false);
-                    }
-                  }}
-                  disabled={verifyingWallet || !walletSig.trim()}
-                  fullWidth
-                  sx={accentButtonSx}
-                >
-                  {verifyingWallet ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Submit Signature'}
-                </Button>
-              </Stack>
+              <WalletOwnershipVerificationPanel
+                challenge={walletChallenge}
+                sig={walletSig}
+                onSigChange={setWalletSig}
+                onSubmit={async () => {
+                  if (!walletChallenge || !pendingWalletInfo) return;
+                  setVerifyingWallet(true);
+                  props.setError(null);
+                  try {
+                    props.log('EU Travel Rule: Submitting wallet ownership signature', `challengeId=${walletChallenge.challengeId}`);
+                    await props.onramp.submitWalletOwnershipSignature({ challengeId: walletChallenge.challengeId, signature: walletSig });
+                    props.log('EU Travel Rule: Wallet ownership verified');
+                    setWalletVerifPhase('idle');
+                    setWalletChallenge(null);
+                    setWalletSig('');
+                    setNewAddr('');
+                    setPendingWalletInfo(null);
+                    await fetchWallets();
+                  } catch (e: any) {
+                    props.setError(`Wallet ownership verification failed: ${e?.message || e}`);
+                  } finally {
+                    setVerifyingWallet(false);
+                  }
+                }}
+                loading={verifyingWallet}
+                livemode={livemode}
+                compact
+                colors={colors}
+                inputSx={inputSx}
+                accentButtonSx={accentButtonSx}
+              />
             )}
           </Stack>
         );
@@ -1473,85 +1439,23 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
         // ── Wallet ownership verification overlay ──
         if (sessionWalletVerifPhase !== 'idle' && sessionWalletChallenge) {
           return (
-            <Stack spacing={3}>
-              <Box>
-                <Typography sx={{ color: colors.textPrimary, fontSize: "1.5rem", fontWeight: 700, mb: 0.5 }}>
-                  Verify Wallet Ownership
-                </Typography>
-                <Typography sx={{ color: colors.textSecondary, fontSize: "0.9rem" }}>
-                  EU Travel Rule requires proof that you control this wallet.
-                </Typography>
-              </Box>
-
-              <Box>
-                <Typography sx={{ color: colors.textMuted, fontSize: "0.75rem", fontWeight: 600, mb: 1, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Challenge Message
-                </Typography>
-                <Box
-                  sx={{
-                    bgcolor: colors.cardBgAlt,
-                    borderRadius: 1.5,
-                    p: 1.5,
-                    border: `1px solid ${colors.borderSubtle}`,
-                    fontFamily: "monospace",
-                    fontSize: "0.8rem",
-                    color: colors.textSecondary,
-                    wordBreak: "break-all",
-                    userSelect: "text",
-                  }}
-                >
-                  {sessionWalletChallenge.message}
-                </Box>
-              </Box>
-
-              <Box
-                sx={{
-                  bgcolor: `${colors.accent}11`,
-                  border: `1px solid ${colors.accent}33`,
-                  borderRadius: 1.5,
-                  p: 1.5,
-                }}
-              >
-                <Typography sx={{ color: colors.accent, fontSize: "0.8rem" }}>
-                  Test mode: use <Box component="span" sx={{ fontFamily: 'monospace' }}>abcd</Box> as the signature to bypass verification (pre-filled).
-                </Typography>
-              </Box>
-
-              <TextField
-                label="Signature"
-                value={sessionWalletSig}
-                onChange={(e) => setSessionWalletSig(e.target.value)}
-                placeholder="Paste your signature here"
-                size="small"
-                fullWidth
-                sx={inputSx}
-              />
-
-              <Stack direction="row" spacing={1.5}>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    setSessionWalletVerifPhase('idle');
-                    setSessionWalletChallenge(null);
-                    setSessionWalletSig('');
-                    setBuySubStep('amount');
-                  }}
-                  fullWidth
-                  sx={{ py: 1.2, color: colors.textSecondary, borderColor: colors.borderSubtle }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSubmitSessionWalletSig}
-                  disabled={verifyingSessionWallet || !sessionWalletSig}
-                  fullWidth
-                  sx={{ ...accentButtonSx, fontSize: "1rem" }}
-                >
-                  {verifyingSessionWallet ? <CircularProgress size={20} sx={{ color: "#fff" }} /> : "Verify Ownership"}
-                </Button>
-              </Stack>
-            </Stack>
+            <WalletOwnershipVerificationPanel
+              challenge={sessionWalletChallenge}
+              sig={sessionWalletSig}
+              onSigChange={setSessionWalletSig}
+              onSubmit={handleSubmitSessionWalletSig}
+              onCancel={() => {
+                setSessionWalletVerifPhase('idle');
+                setSessionWalletChallenge(null);
+                setSessionWalletSig('');
+                setBuySubStep('amount');
+              }}
+              loading={verifyingSessionWallet}
+              livemode={livemode}
+              colors={colors}
+              inputSx={inputSx}
+              accentButtonSx={accentButtonSx}
+            />
           );
         }
 
