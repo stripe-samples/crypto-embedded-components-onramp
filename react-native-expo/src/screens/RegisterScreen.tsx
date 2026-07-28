@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView, Linking,
+  ActivityIndicator, Alert, ScrollView, Linking, View,
 } from 'react-native';
 import { MERCHANT_DISPLAY_NAME } from '../constants';
 import { useOnramp } from '../hooks/useOnramp';
@@ -16,9 +16,20 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Register'>;
 };
 
+const COUNTRIES = [
+  { code: 'US', label: 'US' },
+  { code: 'DE', label: 'DE' },
+  { code: 'FR', label: 'FR' },
+  { code: 'IT', label: 'IT' },
+  { code: 'NL', label: 'NL' },
+  { code: 'ES', label: 'ES' },
+  { code: 'GB', label: 'GB' },
+];
+
 export default function RegisterScreen({ navigation, route }: Props) {
   const { email, authToken: initialToken } = route.params;
   const [phone, setPhone] = useState('+1');
+  const [country, setCountry] = useState('US');
   const [loading, setLoading] = useState(false);
   const { registerLinkUser, authorize } = useOnramp();
 
@@ -29,7 +40,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
     }
     setLoading(true);
     try {
-      const registerResult = await registerLinkUser({ email, phone: phone.trim(), country: 'US' });
+      const registerResult = await registerLinkUser({ email, phone: phone.trim(), country });
       if (registerResult.error) {
         Alert.alert('Registration Error', registerResult.error.message);
         return;
@@ -56,11 +67,15 @@ export default function RegisterScreen({ navigation, route }: Props) {
 
       const customerRes = await getCryptoCustomer(authResult.customerId, authToken);
       const kyc_level = customerRes.success ? customerRes.data.kyc_level : null;
+
       if (kyc_level === 'L0' || kyc_level === 'L1' || kyc_level === 'L2' || kyc_level === 'PENDING') {
-        // Already verified (or under review) — go straight to wallet.
         navigation.navigate('Wallet', { customerId: authResult.customerId, authToken });
       } else {
-        navigation.navigate('KYCPrimer', { customerId: authResult.customerId, authToken });
+        navigation.navigate('KYCPrimer', {
+          customerId: authResult.customerId,
+          authToken,
+          registrationCountry: country,
+        });
       }
     } catch (err: any) {
       Alert.alert('Error', err.message ?? 'Something went wrong.');
@@ -93,6 +108,21 @@ export default function RegisterScreen({ navigation, route }: Props) {
         keyboardType="phone-pad"
         autoCapitalize="none"
       />
+
+      <Text style={styles.label}>Country</Text>
+      <View style={styles.chipRow}>
+        {COUNTRIES.map(c => (
+          <TouchableOpacity
+            key={c.code}
+            style={[styles.chip, country === c.code && styles.chipSelected]}
+            onPress={() => setCountry(c.code)}
+          >
+            <Text style={[styles.chipText, country === c.code && styles.chipTextSelected]}>
+              {c.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <TouchableOpacity
         style={[styles.button, loading && styles.buttonDisabled]}
@@ -135,6 +165,21 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   inputDisabled: { opacity: 0.5 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+    backgroundColor: '#1a1a1a',
+  },
+  chipSelected: {
+    borderColor: '#635BFF',
+    backgroundColor: '#1a1a2e',
+  },
+  chipText: { color: '#aaa', fontSize: 14, fontWeight: '600' },
+  chipTextSelected: { color: '#635BFF' },
   button: {
     backgroundColor: '#635BFF',
     paddingVertical: 16,

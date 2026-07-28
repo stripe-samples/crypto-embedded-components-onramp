@@ -14,6 +14,7 @@ import AddressScreen from '../screens/AddressScreen';
 import WalletScreen from '../screens/WalletScreen';
 import PaymentMethodScreen from '../screens/PaymentMethodScreen';
 import KYCStepUpScreen from '../screens/KYCStepUpScreen';
+import EuKycScreen from '../screens/EuKycScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import SuccessScreen from '../screens/SuccessScreen';
 
@@ -39,6 +40,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Create Account' }} />
           <Stack.Screen name="KYCPrimer" component={KYCPrimerScreen} options={{ title: 'Verify Identity' }} />
           <Stack.Screen name="KYC" component={KYCScreen} options={{ title: 'Personal Info' }} />
+          <Stack.Screen name="EuKyc" component={EuKycScreen} options={{ title: 'EU Identity Verification' }} />
           <Stack.Screen name="Address" component={AddressScreen} options={{ title: 'Home Address' }} />
           <Stack.Screen name="Wallet" component={WalletScreen} options={{ title: 'Add Wallet' }} />
           <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} options={{ title: 'Payment' }} />
