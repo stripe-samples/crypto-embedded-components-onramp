@@ -19,7 +19,7 @@ import { Onramp, useOnramp } from '@stripe/stripe-react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
-import { getCustomerWallets, getCryptoCustomer } from '../api/client';
+import { getCustomerWallets, getCryptoCustomer, WalletInfo } from '../api/client';
 
 const NETWORKS: { label: string; value: Onramp.CryptoNetwork }[] = [
   { label: 'Ethereum', value: Onramp.CryptoNetwork.ethereum },
@@ -28,7 +28,7 @@ const NETWORKS: { label: string; value: Onramp.CryptoNetwork }[] = [
   { label: 'Base', value: Onramp.CryptoNetwork.base },
 ];
 
-type ExistingWallet = { id: string; network: string; wallet_address: string };
+type ExistingWallet = WalletInfo;
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Wallet'>;
@@ -95,6 +95,26 @@ export default function WalletScreen({ navigation, route }: Props) {
         return;
       }
       if (kycRegion === 'eu') {
+        // Re-fetch wallets to check if this wallet already has verified ownership
+        // (e.g. a previously verified address being re-added). The RN SDK's
+        // registerWalletAddress doesn't return the wallet object directly.
+        const walletsRes = await getCustomerWallets(customerId, authToken);
+        const registeredWallet = walletsRes.success
+          ? walletsRes.data.data.find((w: ExistingWallet) => w.wallet_address === address.trim())
+          : null;
+
+        if (registeredWallet?.verified_ownership) {
+          // Already verified — skip the challenge flow
+          navigation.navigate('PaymentMethod', {
+            customerId,
+            authToken,
+            walletAddress: address.trim(),
+            network,
+            kycRegion: kycRegion ?? undefined,
+          });
+          return;
+        }
+
         try {
           const challengeResult = await getWalletOwnershipChallenge(address.trim(), network);
           if (challengeResult.error) {

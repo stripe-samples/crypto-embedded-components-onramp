@@ -67,6 +67,7 @@ export interface WalletInfo {
   id: string;
   network: string;
   wallet_address: string;
+  verified_ownership?: boolean;
 }
 
 export interface WalletsResponse {
