@@ -24,6 +24,7 @@ app.use('/v1', onrampRoutes);
 app.use('/v1', remittanceRoutes);
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log('Crypto Onramp backend is running.');
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`Crypto Onramp backend is running on http://${HOST}:${PORT}.`);
 });
