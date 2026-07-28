@@ -58,7 +58,7 @@ export type WizardViewProps = {
   onCheckAccount: (email: string) => Promise<void>;
   onRegister: (email: string, phone: string, country: string) => Promise<void>;
   onSubmitKycInfo: (info: KycInfo) => Promise<void>;
-  onRegisterWallet: (address: string, network: CryptoNetwork) => Promise<void>;
+  onRegisterWallet: (address: string, network: CryptoNetwork) => Promise<import("@stripe/crypto").CryptoConsumerWallet>;
   onDeleteWallet: (token: string) => Promise<void>;
   onCollectPaymentMethod: (
     types: string[],
@@ -1302,9 +1302,10 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                 onClick={async () => {
                   setAdding(true);
                   try {
-                    await props.onRegisterWallet(newAddr, newNet);
-                    if (props.kycRegion === 'eu') {
-                      // EU Travel Rule: request a wallet ownership challenge
+                    const wallet = await props.onRegisterWallet(newAddr, newNet);
+                    if (props.kycRegion === 'eu' && !wallet.verified_ownership) {
+                      // EU Travel Rule: request a wallet ownership challenge only if
+                      // the wallet hasn't already been verified (e.g. re-added wallet).
                       setPendingWalletInfo({ address: newAddr, network: newNet });
                       try {
                         const challenge = await props.onramp.getWalletOwnershipChallenge({ walletAddress: newAddr, network: newNet });

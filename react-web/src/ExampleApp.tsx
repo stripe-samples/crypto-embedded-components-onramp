@@ -406,8 +406,9 @@ const ExampleAppInner: React.FC<{
         );
         log(
           "Register wallet result",
-          `wallet_token=${response.id}, network=${response.network}`,
+          `wallet_token=${response.id}, network=${response.network}, verified_ownership=${response.verified_ownership}`,
         );
+        return response;
       } catch (e) {
         surfaceError("Register wallet error", e);
         throw e;
