@@ -30,6 +30,8 @@ Because funds land in a user-owned wallet, the same pattern can support immediat
 
 This sample is structured around a sender-owned, non-custodial Privy wallet. The backend creates or reuses the wallet through Privy's server-side APIs, but the wallet is for the sender, not the backend. The backend keeps Privy identifiers and authorization keys server-side so the mobile app only handles the wallet address needed by Stripe Onramp.
 
+This sample uses Privy auth with a linked email account. Privy custom auth with app-issued JWTs is also supported by Privy and can be a good fit for production apps that want Privy to verify their existing app identity directly, but it is not required for this recipe.
+
 Before wallet setup, the app asks the sender to consent to the wallet-backed remittance flow: create or reuse a wallet, receive USDC from Stripe Onramp into that wallet, and use delegated authority to send those funds to the configured payout/offramp destination. Production apps should store that consent record and scope delegated authority as narrowly as possible.
 
 This sample uses one configured payout/offramp destination to keep the integration concrete. The same recipe can route post-Onramp USDC to a receiver wallet, an offramp provider, or another approved destination supported by the developer's remittance product.
@@ -126,4 +128,4 @@ The user-facing flow is:
 
 ## Production Notes
 
-This sample uses an in-memory backend store to keep the integration easy to inspect. Production implementations should add durable storage, webhook signature verification, idempotent backend state transitions, persisted consent records, Privy signer/policy lifecycle management, downstream payout status, support workflows for returns or failed payout handoff, and review of any requirements for wallet, receiver, offramp, or local payout experiences.
+This sample uses an in-memory backend store and a preconfigured Privy policy to keep the integration easy to inspect. Production implementations should add durable storage, webhook signature verification, idempotent backend state transitions, persisted consent records, consent-aligned Privy signer/policy lifecycle management, downstream payout status, support workflows for returns or failed payout handoff, and review of any requirements for wallet, receiver, offramp, or local payout experiences.

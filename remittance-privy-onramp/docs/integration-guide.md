@@ -1,15 +1,185 @@
 # Integration Guide
 
-This guide walks through the implementation in this sample. It assumes you already understand the product model from the [recipe overview](stablecoin-remittance-recipe.md).
+This guide explains how to combine Stripe Embedded Components Onramp and Privy wallets to build a stablecoin remittance app.
 
-At a high level, the app does four things:
+Use the official Stripe and Privy docs for the baseline product integrations. This guide focuses on the remittance-specific parts: using a sender-owned Privy wallet as the Onramp destination, collecting consent for wallet-backed movement, and handling what happens after Stripe delivers USDC to the wallet.
 
-1. Authenticates the sender with the developer app and Link.
-2. Creates or reuses a user-owned, non-custodial Privy wallet for the sender.
-3. Creates a normal Stripe Onramp session to that wallet address.
-4. Holds the delivered USDC in the wallet or sends it to a payout/offramp destination.
+For the product model and flow of funds, see the [recipe overview](stablecoin-remittance-recipe.md).
 
-## Source Map
+## Before You Start
+
+Start with the official docs for the underlying products:
+
+- [Stripe Embedded Components Onramp integration guide](https://docs.stripe.com/crypto/onramp/embedded-components-integration-guide)
+- [Privy server-side user wallets](https://docs.privy.io/recipes/wallets/server-side-user-wallets)
+- [Privy delegated permissions](https://docs.privy.io/controls/common-use-cases/delegation)
+- [Privy wallet policies](https://docs.privy.io/controls/policies/overview)
+- [Privy gas sponsorship](https://docs.privy.io/wallets/gas-and-asset-management/gas/overview)
+
+The Stripe docs cover the normal Onramp flow: Link auth, wallet registration, quotes, checkout, and fulfillment. The Privy docs cover wallet creation, delegated authority, policies, and gas sponsorship.
+
+This guide assumes you are building a flow like:
+
+1. Alice wants to send value to Bob.
+2. Alice signs in to the developer app and authorizes with Link for Stripe Onramp.
+3. The developer app creates or reuses Alice's Privy wallet.
+4. Stripe Onramp delivers USDC to Alice's wallet.
+5. The developer app either holds USDC in Alice's wallet or moves it onward through a payout/offramp route.
+
+## Step 1: Authenticate The Sender
+
+Use your own app authentication for the sender. Use Link for the Stripe Onramp transaction.
+
+Keep those concepts separate:
+
+- App auth identifies Alice inside the developer app.
+- Link auth identifies Alice for Stripe Onramp.
+- The backend stores the mapping needed to create Onramp sessions for the Link-authenticated Onramp user.
+
+In this sample, the backend creates a Link auth intent and later stores the Link-authenticated Onramp user. A production app should follow the Stripe Embedded Components Onramp guide for the exact Link auth flow.
+
+## Step 2: Create Or Reuse The Sender Wallet
+
+Use Privy's server-side wallet APIs to create or retrieve a wallet for the authenticated app user.
+
+The remittance-specific decision is that this wallet becomes the Stripe Onramp destination. Stripe delivers USDC into the sender's wallet; the developer app controls the post-delivery wallet experience.
+
+Privy's server-side user wallet recipe shows custom authentication with app-issued JWTs. That is a good fit when a developer already has an auth system and wants Privy to verify the app's user identity directly. It is not strictly required for this recipe. Developers can also use Privy auth, such as a linked email account, then create the wallet and configure delegated signer/policy controls server-side.
+
+This sample keeps the setup minimal and uses Privy auth with a linked email account. A production app can choose either model:
+
+- Use Privy auth when you want Privy to authenticate users through linked accounts such as email or social login.
+- Use custom auth when you want Privy to authenticate users with JWTs issued by your existing auth system.
+
+The app should collect clear user consent before creating or configuring wallet authority. In this recipe, Alice should understand that:
+
+- A non-custodial wallet is created or reused for her.
+- Stripe Onramp will deliver USDC to that wallet.
+- The developer app may use delegated authority to move USDC from that wallet for the disclosed remittance flow.
+
+The backend should keep Privy internals server-side. The mobile app only needs the wallet address and network:
+
+```json
+{
+  "walletAddress": "0x...",
+  "network": "tempo",
+  "status": "ready"
+}
+```
+
+Keep Privy user IDs, wallet IDs, signer IDs, policy IDs, and authorization keys on the backend.
+
+## Step 3: Register The Wallet With Stripe Onramp
+
+Before creating the Onramp session, register the sender's wallet address with Stripe Onramp through the Stripe SDK.
+
+This is standard Onramp behavior covered by the Stripe Embedded Components Onramp guide. The only recipe-specific part is where the address comes from: the registered address is Alice's Privy wallet address from Step 2.
+
+## Step 4: Create The Onramp Session
+
+Create a normal Stripe Onramp session.
+
+The remittance-specific part is the session destination:
+
+- `destination_currency=usdc`
+- `destination_network=<configured Onramp network>`
+- `wallet_address=<sender Privy wallet address>`
+- `crypto_customer_id=<Link-authenticated crypto customer>`
+
+From Stripe Onramp's perspective, this is still a normal Onramp session. The destination happens to be a Privy wallet that the developer app created or reused for the sender.
+
+The app can then use the normal Embedded Components Onramp flow for quote refresh, payment method selection, and checkout.
+
+## Step 5: Keep Chain Configuration Aligned
+
+Stripe Onramp, Privy, the app, and the USDC contract must all point at the same chain.
+
+For example:
+
+```bash
+EXPO_PUBLIC_ONRAMP_NETWORK=tempo
+REMITTANCE_ONRAMP_NETWORK=tempo
+PRIVY_CAIP2=eip155:4217
+USDC_CONTRACT_ADDRESS=0x...
+```
+
+In this sample:
+
+- `EXPO_PUBLIC_ONRAMP_NETWORK` is used by the mobile app when registering the wallet with Stripe Onramp.
+- `REMITTANCE_ONRAMP_NETWORK` is used by the backend when creating the Onramp session.
+- `PRIVY_CAIP2` is used by the backend for Privy balance lookup and delegated transfer.
+- `USDC_CONTRACT_ADDRESS` is used by the backend when reading USDC balance and encoding ERC-20 transfers.
+
+## Step 6: Track Onramp Fulfillment
+
+Use Stripe webhooks in production to track Onramp status. For local development, this sample also supports polling so it can run without a public webhook tunnel.
+
+For this recipe, the key status boundary is fulfillment:
+
+- Before fulfillment, Stripe Onramp is still processing the payment and USDC delivery.
+- At fulfillment, Stripe has delivered USDC to the sender's wallet.
+- After fulfillment, the developer app owns downstream status: wallet hold, delegated transfer, payout/offramp routing, local delivery, retries, returns, and support.
+
+The app UI should make this clear. "Payment complete" is not the same as "recipient paid out" unless the downstream route has also completed.
+
+## Step 7: Hold Funds Or Move Them Onward
+
+After Stripe delivers USDC to the sender wallet, the developer app decides what happens next.
+
+This sample supports two modes:
+
+- `Hold in wallet`: USDC remains in Alice's Privy wallet after Onramp fulfillment.
+- `Auto send to payout`: after fulfillment, the backend submits a delegated USDC transfer to the configured payout/offramp destination.
+
+If your product moves funds automatically, use Privy delegated authority and policies to keep that action narrowly scoped. For example, scope by asset, chain, destination, amount, and action type where possible.
+
+This sample uses a preconfigured policy for simplicity. In production, prefer consent-aligned policies. For a one-off remittance, that often means creating or selecting a narrow policy for the specific remittance intent once the destination, amount, asset, chain, and expiry are known. For a wallet or balance product with repeated transfers, a per-wallet policy with explicit limits and approved destinations may fit better.
+
+The downstream destination depends on the product. It could be Bob's wallet, an offramp provider address, or another approved route supported by the developer app.
+
+## Configuration Summary
+
+The mobile app needs:
+
+```bash
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+EXPO_PUBLIC_API_URL=http://localhost:3001
+EXPO_PUBLIC_ONRAMP_NETWORK=tempo
+```
+
+The backend needs Stripe credentials:
+
+```bash
+STRIPE_SECRET_KEY=sk_test_...
+OAUTH_CLIENT_ID=...
+OAUTH_CLIENT_SECRET=...
+```
+
+The backend also needs Privy credentials:
+
+```bash
+PRIVY_APP_ID=...
+PRIVY_APP_SECRET=...
+PRIVY_APP_AUTHORIZATION_PRIVATE_KEY=...
+PRIVY_WALLET_SIGNER_ID=...
+PRIVY_WALLET_POLICY_IDS=...
+PRIVY_SPONSOR_GAS=true
+```
+
+The backend needs the downstream transfer configuration:
+
+```bash
+REMITTANCE_ONRAMP_NETWORK=tempo
+REMITTANCE_OFFRAMP_DESTINATION_ADDRESS=0x...
+PRIVY_CAIP2=eip155:4217
+USDC_CONTRACT_ADDRESS=0x...
+```
+
+When running on a physical device, set `EXPO_PUBLIC_API_URL` to your computer's local network IP address instead of `localhost`.
+
+## Sample Reference
+
+This sample is one implementation of the recipe. The main integration points are:
 
 | Area | Files |
 |------|-------|
@@ -22,194 +192,7 @@ At a high level, the app does four things:
 | Wallet, remittance, fulfillment, payout handoff | `server/routes/remittances.ts` |
 | In-memory sample storage | `server/db/store.ts` |
 
-## 1. Configure Stripe Onramp And Link
-
-The backend needs:
-
-```bash
-STRIPE_SECRET_KEY=sk_test_...
-OAUTH_CLIENT_ID=...
-OAUTH_CLIENT_SECRET=...
-```
-
-The mobile app needs:
-
-```bash
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
-EXPO_PUBLIC_API_URL=http://localhost:3001
-EXPO_PUBLIC_ONRAMP_NETWORK=tempo
-```
-
-The sample backend creates Link auth intents in `server/routes/auth.ts`:
-
-```http
-POST /v1/auth/create
-Authorization: Bearer <app auth token>
-```
-
-After the user completes Link auth in the app, the backend stores the resulting crypto customer ID and exchanges the Link auth intent for OAuth tokens:
-
-```http
-POST /v1/auth/save_user
-Authorization: Bearer <app auth token>
-```
-
-Those OAuth tokens are used by the backend when it calls Stripe Onramp APIs on behalf of the Link-authenticated sender.
-
-## 2. Configure Privy
-
-The backend needs:
-
-```bash
-PRIVY_APP_ID=...
-PRIVY_APP_SECRET=...
-PRIVY_APP_AUTHORIZATION_PRIVATE_KEY=...
-PRIVY_WALLET_SIGNER_ID=...
-PRIVY_WALLET_POLICY_IDS=...
-PRIVY_SPONSOR_GAS=true
-```
-
-The sample uses Privy's server-side APIs to create or reuse a user-owned, non-custodial wallet:
-
-- The app never receives Privy user IDs, wallet IDs, signer IDs, policy IDs, or authorization keys.
-- The backend creates or reuses a Privy user linked to the sample app user's email.
-- The backend creates or reuses an embedded EVM wallet for that Privy user.
-- If configured, the backend attaches the delegated signer and policy during wallet creation.
-
-The backend is orchestrating wallet setup; it is not the intended owner of the wallet. Once Stripe Onramp delivers USDC to the sender's wallet, funds are held in that user-owned wallet through the selected Privy wallet model, and the developer's post-delivery actions should be based on user consent and narrowly scoped delegated authority.
-
-Production apps should choose the Privy authentication and wallet ownership model that matches their product requirements. This sample keeps the auth model simple so the Onramp + wallet + payout sequence is easy to inspect.
-
-Stripe Onramp handles sender checks for the Onramp transaction. Developers should separately evaluate requirements for their wallet experience, receiver experience, delegated wallet actions, offramps, and local payout routes.
-
-## 3. Align Chain Configuration
-
-The app, Stripe Onramp, Privy, and the USDC contract must all point at the same chain.
-
-```bash
-EXPO_PUBLIC_ONRAMP_NETWORK=tempo
-REMITTANCE_ONRAMP_NETWORK=tempo
-PRIVY_CAIP2=eip155:4217
-USDC_CONTRACT_ADDRESS=0x...
-```
-
-`EXPO_PUBLIC_ONRAMP_NETWORK` is used by the mobile app when it registers the wallet with Stripe Onramp. `REMITTANCE_ONRAMP_NETWORK` is used by the backend when it creates the Onramp session. `PRIVY_CAIP2` is used for Privy balance lookup and delegated transfer.
-
-## 4. Collect Consent And Prepare The Sender Wallet
-
-The app asks the sender to consent before preparing the wallet. In this sample, the consent covers creating or reusing a non-custodial wallet for the sender, receiving USDC from Stripe Onramp into that wallet, and using delegated authority to send those funds to the configured payout/offramp destination.
-
-After consent, the app calls:
-
-```http
-POST /v1/remittance_wallet
-Authorization: Bearer <app auth token>
-```
-
-Implemented in `server/routes/remittances.ts`, the backend:
-
-1. Resolves the authenticated app user.
-2. Creates or retrieves a Privy user for the app user's email.
-3. Creates or retrieves the user's embedded EVM wallet.
-4. Attaches the configured delegated signer/policy when creating the wallet.
-5. Stores the app user, Privy IDs, wallet address, network, and payout/offramp destination.
-6. Returns only:
-
-```json
-{
-  "walletAddress": "0x...",
-  "network": "tempo",
-  "status": "ready"
-}
-```
-
-The mobile app uses the returned `walletAddress` as the Stripe Onramp destination. It does not need to know anything about the Privy wallet internals.
-
-This sample keeps consent in the foreground app flow only. Production apps should persist a consent record before creating wallet authority or submitting delegated transfers.
-
-## 5. Register The Wallet With Stripe Onramp
-
-Before creating the Onramp session, the app registers the wallet address with the Link-authenticated Onramp user through the Stripe React Native SDK.
-
-The relevant flow is in:
-
-- `src/screens/WalletScreen.tsx`
-- `src/hooks/useOnramp.ts`
-
-This keeps the rest of the flow close to a normal Embedded Components Onramp integration: the registered wallet address becomes the crypto destination for the Onramp session.
-
-## 6. Create The Onramp Session
-
-After wallet registration and payment method selection, the app asks the backend to create a remittance:
-
-```http
-POST /v1/remittances
-Authorization: Bearer <app auth token>
-```
-
-Implemented in `server/routes/remittances.ts`, the backend:
-
-1. Confirms the requested wallet address belongs to the authenticated app user.
-2. Creates a Stripe Onramp session with:
-   - `destination_currency=usdc`
-   - `destination_network=REMITTANCE_ONRAMP_NETWORK`
-   - `wallet_address=<sender Privy wallet address>`
-   - `crypto_customer_id=<Link-authenticated crypto customer>`
-3. Creates a local remittance record keyed by the Onramp session ID.
-4. Returns the Onramp session and local remittance ID to the app.
-
-The app then uses the Stripe React Native Onramp SDK for quote refresh, payment method collection, and checkout:
-
-```http
-POST /v1/remittances/:remittanceId/quote
-POST /v1/remittances/:remittanceId/checkout
-```
-
-## 7. Track Fulfillment
-
-In production, use Stripe webhooks:
-
-```http
-POST /v1/webhooks/stripe
-```
-
-The sample also supports local polling so the flow works without a public webhook tunnel:
-
-```http
-GET /v1/remittances/:remittanceId?sync=stripe
-Authorization: Bearer <app auth token>
-```
-
-The app status tracker treats Onramp fulfillment as the point where Stripe has delivered USDC to the sender's wallet. From that point on, the developer app tracks downstream state.
-
-## 8. Hold Funds Or Send To Payout
-
-The sample has two modes:
-
-- `Hold in wallet`: no transfer is submitted after Onramp fulfillment. USDC remains in the sender's Privy wallet.
-- `Auto send to payout`: after fulfillment, the backend submits a delegated USDC transfer to the configured payout/offramp destination.
-
-The sample uses a fixed payout/offramp destination. In a production remittance product, the post-delivery destination could be a receiver wallet, an offramp provider address, or another approved route supported by the developer.
-
-Manual payout handoff uses:
-
-```http
-POST /v1/remittances/:remittanceId/transfer
-Authorization: Bearer <app auth token>
-```
-
-Implemented in `server/routes/remittances.ts`, the backend:
-
-1. Confirms the remittance belongs to the authenticated app user.
-2. Confirms Stripe Onramp delivery is fulfilled.
-3. Reads the available USDC balance from Privy.
-4. Encodes an ERC-20 `transfer` to `REMITTANCE_OFFRAMP_DESTINATION_ADDRESS`.
-5. Calls Privy `eth_sendTransaction` with the configured authorization key and gas sponsorship setting.
-6. Stores the submitted transaction hash.
-
-The sample clamps the requested transfer amount to the available wallet balance to make test-mode Onramp deliveries easier to exercise locally. A production app should use explicit amounts, idempotency keys, and backend-owned transfer state.
-
-## Backend Routes
+The sample backend exposes these routes:
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -231,11 +214,10 @@ The sample clamps the requested transfer amount to the available wallet balance 
 
 - Replace the in-memory store with durable storage.
 - Verify Stripe webhook signatures.
-- Make all backend state transitions idempotent.
+- Make backend state transitions idempotent.
 - Store user consent records for wallet creation and delegated wallet actions.
 - Keep Privy identifiers, signer IDs, policy IDs, and authorization keys server-side.
-- Scope Privy delegated signer/policy controls as narrowly as possible.
+- Scope Privy delegated signer and policy controls as narrowly as possible.
 - Do not depend on the foreground mobile app to advance funds after Onramp fulfillment.
 - Track downstream payout/offramp status separately from Stripe Onramp status.
 - Define support and return handling for failed or delayed downstream payout.
-- Review any requirements for wallet, receiver, offramp, or local payout experiences.

@@ -105,6 +105,8 @@ If the developer uses delegated authority to automate post-delivery transfers, t
 - No arbitrary contract calls.
 - No key export.
 
+This sample uses a preconfigured policy so the integration is easy to run. A production app should align delegated authority with the user's consent and the product flow. For one-off remittances, that often means creating or selecting a narrow policy for each remittance intent once the amount, asset, chain, destination, and expiry are known. For wallet or balance products with recurring movement, a per-wallet policy with explicit limits and approved destinations may be a better fit.
+
 The app should explain the wallet-backed flow before wallet creation or delegated transfer authority is configured. The user should understand that:
 
 - A non-custodial wallet is created or reused for them.
