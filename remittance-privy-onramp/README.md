@@ -17,6 +17,15 @@ Because funds land in a user-owned wallet, the same pattern can support immediat
 - [Recipe overview](docs/stablecoin-remittance-recipe.md): product model, ownership boundaries, flow of funds, and UX considerations.
 - [Integration guide](docs/integration-guide.md): concrete implementation steps, backend routes, and source-file pointers.
 
+## Project Layout
+
+```text
+remittance-privy-onramp/
+  backend/  Shared Node.js API used by client apps
+  expo/     Expo React Native app
+  docs/     Recipe and integration guide
+```
+
 ## Prerequisites
 
 - Node.js v18+
@@ -39,14 +48,13 @@ This sample uses one configured payout/offramp destination to keep the integrati
 ## Install
 
 ```bash
-npm install
-cd server && npm install && cd ..
+npm run install:all
 ```
 
 ## Configure The Mobile App
 
 ```bash
-cp .env.example .env
+cp expo/.env.example expo/.env
 ```
 
 Set:
@@ -62,7 +70,7 @@ When running on a physical device, set `EXPO_PUBLIC_API_URL` to your computer's 
 ## Configure The Backend
 
 ```bash
-cp server/.env.example server/.env
+cp backend/.env.example backend/.env
 ```
 
 Set:
@@ -92,21 +100,21 @@ USDC_CONTRACT_ADDRESS=0xYOUR_USDC_CONTRACT_ADDRESS
 Start the backend:
 
 ```bash
-npm run server
+npm run backend
 ```
 
 Start Metro:
 
 ```bash
-npx expo start
+npm run expo
 ```
 
 Run the native app:
 
 ```bash
-npm run ios
+npm run expo:ios
 # or
-npm run android
+npm run expo:android
 ```
 
 ## App Flow
