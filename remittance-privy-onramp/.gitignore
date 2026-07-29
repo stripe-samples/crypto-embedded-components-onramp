@@ -1,18 +1,24 @@
-.env
-.env.*
-!.env.example
+# Local leftovers from running the Expo app before it was moved under expo/.
+/.env
+/.env.*
+/.expo/
+/node_modules/
+/ios/
+/android/
 
-node_modules/
-.expo/
-dist/
-ios/
-android/
+expo/.env
+expo/.env.*
+!expo/.env.example
+expo/node_modules/
+expo/.expo/
+expo/ios/
+expo/android/
 
-server/.env
-server/.env.*
-!server/.env.example
-server/node_modules/
-server/dist/
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/node_modules/
+backend/dist/
 
 .DS_Store
 npm-debug.log*

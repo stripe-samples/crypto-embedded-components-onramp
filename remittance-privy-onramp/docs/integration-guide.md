@@ -139,7 +139,7 @@ The downstream destination depends on the product. It could be Bob's wallet, an 
 
 ## Configuration Summary
 
-The mobile app needs:
+The Expo app reads client configuration from `expo/.env`:
 
 ```bash
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
@@ -147,7 +147,7 @@ EXPO_PUBLIC_API_URL=http://localhost:3001
 EXPO_PUBLIC_ONRAMP_NETWORK=tempo
 ```
 
-The backend needs Stripe credentials:
+The backend reads server configuration from `backend/.env`. It needs Stripe credentials:
 
 ```bash
 STRIPE_SECRET_KEY=sk_test_...
@@ -155,7 +155,7 @@ OAUTH_CLIENT_ID=...
 OAUTH_CLIENT_SECRET=...
 ```
 
-The backend also needs Privy credentials:
+It also needs Privy credentials:
 
 ```bash
 PRIVY_APP_ID=...
@@ -166,7 +166,7 @@ PRIVY_WALLET_POLICY_IDS=...
 PRIVY_SPONSOR_GAS=true
 ```
 
-The backend needs the downstream transfer configuration:
+And the downstream transfer configuration:
 
 ```bash
 REMITTANCE_ONRAMP_NETWORK=tempo
@@ -183,14 +183,14 @@ This sample is one implementation of the recipe. The main integration points are
 
 | Area | Files |
 |------|-------|
-| App navigation and screens | `src/navigation/AppNavigator.tsx`, `src/screens/*` |
-| Mobile API client | `src/api/client.ts` |
-| Stripe React Native SDK wrapper | `src/hooks/useOnramp.ts` |
-| Backend entrypoint | `server/server.ts` |
-| Link auth and sample app auth | `server/routes/auth.ts` |
-| Onramp customer and limits helpers | `server/routes/onramp.ts` |
-| Wallet, remittance, fulfillment, payout handoff | `server/routes/remittances.ts` |
-| In-memory sample storage | `server/db/store.ts` |
+| App navigation and screens | `expo/src/navigation/AppNavigator.tsx`, `expo/src/screens/*` |
+| Mobile API client | `expo/src/api/client.ts` |
+| Stripe React Native SDK wrapper | `expo/src/hooks/useOnramp.ts` |
+| Backend entrypoint | `backend/server.ts` |
+| Link auth and sample app auth | `backend/routes/auth.ts` |
+| Onramp customer and limits helpers | `backend/routes/onramp.ts` |
+| Wallet, remittance, fulfillment, payout handoff | `backend/routes/remittances.ts` |
+| In-memory sample storage | `backend/db/store.ts` |
 
 The sample backend exposes these routes:
 
