@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Remittance Privy Onramp",
+    "slug": "remittance-privy-onramp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "scheme": "remittanceonramp",
+    "plugins": [
+      "./plugins/withMaterialTheme",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "includeOnramp": true
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stripe.crypto.onramp.remittance.example",
+      "entitlements": {
+        "com.apple.developer.devicecheck.appattest-environment": "development"
+      },
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSExceptionDomains": {
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.stripe.crypto.onramp.remittance.example"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

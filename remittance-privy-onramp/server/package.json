@@ -1,0 +1,26 @@
+{
+  "name": "remittance-privy-onramp-backend",
+  "version": "1.0.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && node dist/server.js",
+    "dev": "ts-node server.ts"
+  },
+  "dependencies": {
+    "@privy-io/node": "^0.19.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0",
+    "stripe": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.2",
+    "@types/node-fetch": "^2.6.13",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}
