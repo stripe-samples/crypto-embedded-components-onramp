@@ -227,6 +227,51 @@ export default function SettingsScreen({ navigation: _navigation }: Props) {
         </View>
       )}
 
+      {/* ------------------------------------------------------------------ */}
+      {/* EU Wallet Ownership Verification section */}
+      {/* ------------------------------------------------------------------ */}
+      <Text style={[styles.sectionTitle, { marginTop: 36 }]}>
+        EU Wallet Ownership Verification
+      </Text>
+      <Text style={styles.sectionSubtitle}>
+        When enabled, the app requests a cryptographic challenge immediately after
+        registering a new EU wallet and collects a signature to prove ownership.
+        When disabled, this step is skipped — EU checkout will return a{' '}
+        <Text style={styles.mono}>wallet_ownership_verification_required</Text> error
+        at payment time.
+      </Text>
+
+      <View style={styles.toggleCard}>
+        <View style={styles.toggleLeft}>
+          <Text style={styles.toggleTitle}>
+            {settings.walletOwnershipVerification ? 'Proactive (enabled)' : 'Skipped (disabled)'}
+          </Text>
+          <Text style={styles.toggleDesc}>
+            {settings.walletOwnershipVerification
+              ? 'Collects wallet ownership signature on EU wallet registration'
+              : 'Skips signature — EU checkout will fail with a verification error'}
+          </Text>
+        </View>
+        <Switch
+          value={settings.walletOwnershipVerification}
+          onValueChange={v => updateSettings({ walletOwnershipVerification: v })}
+          trackColor={{ false: '#333', true: '#635BFF' }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      {!settings.walletOwnershipVerification && (
+        <View style={[styles.infoBox, styles.warningBox]}>
+          <Text style={styles.warningTitle}>EU checkout will fail</Text>
+          <Text style={styles.infoDesc}>
+            Without wallet ownership verification, creating an onramp session for
+            an EU customer returns{' '}
+            <Text style={styles.mono}>wallet_ownership_verification_required</Text>.
+            Enable this toggle to complete the step proactively on wallet registration.
+          </Text>
+        </View>
+      )}
+
     </ScrollView>
   );
 }
@@ -346,4 +391,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   infoDesc: { color: '#555', fontSize: 13, lineHeight: 18 },
+  warningBox: { borderColor: '#7a3a1a', backgroundColor: '#1a0d0a' },
+  warningTitle: {
+    color: '#f97316',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
 });

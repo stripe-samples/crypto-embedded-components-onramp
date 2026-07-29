@@ -13,13 +13,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { Onramp, useOnramp } from '@stripe/stripe-react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { getCustomerWallets, getCryptoCustomer, WalletInfo } from '../api/client';
+import { useSettings } from '../context/SettingsContext';
+import ScreenScrollView from '../components/ScreenScrollView';
+import WalletOwnershipVerificationPanel from '../components/WalletOwnershipVerificationPanel';
 
 const NETWORKS: { label: string; value: Onramp.CryptoNetwork }[] = [
   { label: 'Ethereum', value: Onramp.CryptoNetwork.ethereum },
@@ -52,6 +55,7 @@ export default function WalletScreen({ navigation, route }: Props) {
   const [pendingNavParams, setPendingNavParams] = useState<{ address: string; network: string } | null>(null);
 
   const { registerWalletAddress, getWalletOwnershipChallenge, submitWalletOwnershipSignature } = useOnramp();
+  const { settings } = useSettings();
 
   useEffect(() => {
     (async () => {
@@ -94,7 +98,7 @@ export default function WalletScreen({ navigation, route }: Props) {
         Alert.alert('Error', result.error.message);
         return;
       }
-      if (kycRegion === 'eu') {
+      if (kycRegion === 'eu' && settings.walletOwnershipVerification) {
         // Re-fetch wallets to check if this wallet already has verified ownership
         // (e.g. a previously verified address being re-added). The RN SDK's
         // registerWalletAddress doesn't return the wallet object directly.
@@ -171,7 +175,7 @@ export default function WalletScreen({ navigation, route }: Props) {
 
   if (loadingWallets) {
     return (
-      <View style={[styles.container, styles.center]}>
+      <View style={styles.center}>
         <ActivityIndicator color="#635BFF" size="large" />
       </View>
     );
@@ -179,53 +183,20 @@ export default function WalletScreen({ navigation, route }: Props) {
 
   if (verifyPhase === 'signing' && ownershipChallenge) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Verify Wallet Ownership</Text>
-        <Text style={styles.subtitle}>
-          EU Travel Rule requires proof that you control this wallet.
-        </Text>
-
-        <Text style={styles.label}>Challenge Message</Text>
-        <TextInput
-          style={[styles.input, styles.inputMono, { minHeight: 100 }]}
-          value={ownershipChallenge.message}
-          editable={false}
-          multiline
-          selectTextOnFocus
+      <ScreenScrollView>
+        <WalletOwnershipVerificationPanel
+          challenge={ownershipChallenge}
+          sig={signature}
+          onSigChange={setSignature}
+          onSubmit={handleSubmitSignature}
+          loading={verifying}
         />
-
-        <View style={styles.testCard}>
-          <Text style={styles.testCardText}>
-            Test mode: paste the challenge message above as the signature to pass verification.
-          </Text>
-        </View>
-
-        <Text style={styles.label}>Signature</Text>
-        <TextInput
-          style={styles.input}
-          value={signature}
-          onChangeText={setSignature}
-          placeholder="Paste your signature here"
-          placeholderTextColor="#555"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <TouchableOpacity
-          style={[styles.button, (verifying || !signature) && styles.buttonDisabled]}
-          onPress={handleSubmitSignature}
-          disabled={verifying || !signature}
-        >
-          {verifying
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>Verify Ownership</Text>}
-        </TouchableOpacity>
-      </ScrollView>
+      </ScreenScrollView>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenScrollView>
       {existingWallets.length > 0 && !showAddNew && (
         <>
           <Text style={styles.title}>Your wallets</Text>
@@ -307,14 +278,12 @@ export default function WalletScreen({ navigation, route }: Props) {
           )}
         </>
       )}
-    </ScrollView>
+    </ScreenScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
-  content: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32 },
-  center: { justifyContent: 'center', alignItems: 'center' },
+  center: { justifyContent: 'center', alignItems: 'center', flex: 1, backgroundColor: '#0a0a0a' },
   title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#888', marginBottom: 24 },
   label: { color: '#aaa', fontSize: 13, marginBottom: 8 },
@@ -378,14 +347,4 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   addNewLink: { alignItems: 'center', marginTop: 16 },
   addNewText: { color: '#635BFF', fontSize: 14, fontWeight: '600' },
-  inputMono: { fontFamily: 'Courier', fontSize: 13, color: '#ccc' },
-  testCard: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#2a2a4a',
-    marginBottom: 20,
-  },
-  testCardText: { color: '#7070cc', fontSize: 13, lineHeight: 18 },
 });

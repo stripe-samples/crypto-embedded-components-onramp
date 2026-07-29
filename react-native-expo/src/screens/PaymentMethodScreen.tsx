@@ -123,6 +123,8 @@ import {
 import { CURRENCIES_BY_NETWORK } from '../constants';
 import { useSettings } from '../context/SettingsContext';
 import { LOCAL_LIMITS, TransactionLimits } from '../kycLimits';
+import ScreenScrollView from '../components/ScreenScrollView';
+import WalletOwnershipVerificationPanel from '../components/WalletOwnershipVerificationPanel';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'PaymentMethod'>;
@@ -563,6 +565,13 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           destinationCurrency: destCurrency,
           paymentLabel,
         };
+        if (!settings.walletOwnershipVerification) {
+          Alert.alert(
+            'Wallet Verification Required',
+            'EU checkout requires wallet ownership verification. Enable it in Settings to complete this purchase.',
+          );
+          return;
+        }
         Alert.alert(
           'Wallet verification required',
           'This purchase requires you to verify ownership of the selected wallet before continuing.',
@@ -683,48 +692,15 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 
   if (walletVerifPhase === 'signing' && walletChallenge) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Verify Wallet Ownership</Text>
-        <Text style={styles.subtitle}>
-          EU Travel Rule requires proof that you control this wallet.
-        </Text>
-
-        <Text style={styles.label}>Challenge Message</Text>
-        <TextInput
-          style={[styles.input, styles.inputMono, { minHeight: 100 }]}
-          value={walletChallenge.message}
-          editable={false}
-          multiline
-          selectTextOnFocus
+      <ScreenScrollView>
+        <WalletOwnershipVerificationPanel
+          challenge={walletChallenge}
+          sig={walletSig}
+          onSigChange={setWalletSig}
+          onSubmit={handleSubmitWalletSig}
+          loading={verifyingWallet}
         />
-
-        <View style={styles.testCard}>
-          <Text style={styles.testCardText}>
-            Test mode: paste the challenge message above as the signature to pass verification.
-          </Text>
-        </View>
-
-        <Text style={styles.label}>Signature</Text>
-        <TextInput
-          style={styles.input}
-          value={walletSig}
-          onChangeText={setWalletSig}
-          placeholder="Paste your signature here"
-          placeholderTextColor="#555"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <TouchableOpacity
-          style={[styles.button, (verifyingWallet || !walletSig) && styles.buttonDisabled]}
-          onPress={handleSubmitWalletSig}
-          disabled={verifyingWallet || !walletSig}
-        >
-          {verifyingWallet
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>Verify Ownership</Text>}
-        </TouchableOpacity>
-      </ScrollView>
+      </ScreenScrollView>
     );
   }
 
