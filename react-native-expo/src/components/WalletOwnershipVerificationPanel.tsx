@@ -4,7 +4,7 @@
  * Shared between WalletScreen (proactive verification on registration)
  * and PaymentMethodScreen (reactive verification on checkout failure).
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet,
 } from 'react-native';
@@ -16,9 +16,16 @@ type Props = {
   onSigChange: (v: string) => void;
   onSubmit: () => void;
   loading: boolean;
+  livemode: boolean;
 };
 
-export default function WalletOwnershipVerificationPanel({ challenge, sig, onSigChange, onSubmit, loading }: Props) {
+export default function WalletOwnershipVerificationPanel({ challenge, sig, onSigChange, onSubmit, loading, livemode }: Props) {
+  useEffect(() => {
+    if (!livemode && sig === '') {
+      onSigChange('abcd');
+    }
+  }, [livemode, challenge.challengeId]);
+
   return (
     <View>
       <Text style={styles.title}>Verify Wallet Ownership</Text>
@@ -35,11 +42,13 @@ export default function WalletOwnershipVerificationPanel({ challenge, sig, onSig
         selectTextOnFocus
       />
 
-      <View style={styles.testCard}>
-        <Text style={styles.testCardText}>
-          Test mode: paste the challenge message above as the signature to pass verification.
-        </Text>
-      </View>
+      {!livemode && (
+        <View style={styles.testCard}>
+          <Text style={styles.testCardText}>
+            Test mode: signature pre-filled with <Text style={styles.testCardCode}>'abcd'</Text> — tap Verify Ownership to continue.
+          </Text>
+        </View>
+      )}
 
       <Text style={styles.label}>Signature</Text>
       <TextInput
@@ -90,6 +99,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   testCardText: { color: '#7070cc', fontSize: 13, lineHeight: 18 },
+  testCardCode: { fontFamily: 'Courier', color: '#9090dd' },
   button: {
     backgroundColor: '#635BFF',
     paddingVertical: 16,

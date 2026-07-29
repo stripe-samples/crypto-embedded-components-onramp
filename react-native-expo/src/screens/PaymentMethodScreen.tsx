@@ -156,6 +156,8 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const [creatingSession, setCreatingSession] = useState(false);
   const [steppingUp, setSteppingUp] = useState(false);
 
+  const [livemode, setLivemode] = useState(true);
+
   // KYC tiers — fetched on mount and refreshed by the polling loop.
   const [kycTiers, setKycTiers] = useState<KycTierEntry[]>([]);
   const [loadingTiers, setLoadingTiers] = useState(true);
@@ -258,6 +260,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         const result = await getCryptoCustomer(customerId, authToken);
         if (cancelled || !mountedRef.current) return;
         if (result.success) {
+          setLivemode(result.data.livemode);
           const tiers = result.data.kycTiers ?? [];
           setKycTiers(tiers);
           const tierKey = deriveCurrentTier(tiers);
@@ -699,6 +702,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           onSigChange={setWalletSig}
           onSubmit={handleSubmitWalletSig}
           loading={verifyingWallet}
+          livemode={livemode}
         />
       </ScreenScrollView>
     );

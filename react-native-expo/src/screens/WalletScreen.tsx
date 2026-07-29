@@ -41,6 +41,7 @@ type Props = {
 export default function WalletScreen({ navigation, route }: Props) {
   const { customerId, authToken } = route.params;
   const [kycRegion, setKycRegion] = useState<string | null>(null);
+  const [livemode, setLivemode] = useState(true);
   const [existingWallets, setExistingWallets] = useState<ExistingWallet[]>([]);
   const [loadingWallets, setLoadingWallets] = useState(true);
   const [selectedWallet, setSelectedWallet] = useState<ExistingWallet | null>(null);
@@ -70,6 +71,7 @@ export default function WalletScreen({ navigation, route }: Props) {
       }
       if (customerRes.success) {
         setKycRegion(customerRes.data.kyc_region);
+        setLivemode(customerRes.data.livemode);
       }
       setLoadingWallets(false);
     })();
@@ -190,6 +192,7 @@ export default function WalletScreen({ navigation, route }: Props) {
           onSigChange={setSignature}
           onSubmit={handleSubmitSignature}
           loading={verifying}
+          livemode={livemode}
         />
       </ScreenScrollView>
     );

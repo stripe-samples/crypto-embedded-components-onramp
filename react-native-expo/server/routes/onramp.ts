@@ -59,6 +59,7 @@ router.get('/crypto_customer/:customerId', async (req: Request, res: Response) =
 
     res.json({
       customerId: data.id,
+      livemode: data.livemode,
       kyc_level,
       kyc_region: kycRegion,
       kycTiers,

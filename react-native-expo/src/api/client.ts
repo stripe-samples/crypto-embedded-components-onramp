@@ -37,6 +37,7 @@ export interface KycTierEntry {
 
 export interface CryptoCustomerResponse {
   customerId: string;
+  livemode: boolean;
   kyc_level: string;
   kyc_region: string | null;
   kycTiers: KycTierEntry[];
