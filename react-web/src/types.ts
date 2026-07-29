@@ -33,11 +33,19 @@ export type OnrampSession = {
     destination_network: string;
     wallet_address: string;
     quote_expiration?: string;
+    last_error?: string;
+    source_currency?: string;
     fees: {
       network_fee_amount: string;
       transaction_fee_amount: string;
     };
   };
+};
+
+export type CheckoutErrorCode = 'wallet_ownership_required';
+
+export type CheckoutError = {
+  code: CheckoutErrorCode;
 };
 
 export type MissingIdentifier = {

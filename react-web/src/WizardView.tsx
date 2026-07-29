@@ -5,6 +5,11 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   InputAdornment,
   Link,
@@ -21,13 +26,14 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { Dayjs } from "dayjs";
-import type { KycInfo, CryptoNetwork, OnrampCoordinator } from "@stripe/crypto";
+import type { KycInfo, CryptoNetwork, OnrampCoordinator, WalletOwnershipChallenge } from "@stripe/crypto";
 import { getTheme } from "./theme";
 import { LOCAL_LIMITS } from "./kycLimits";
 import { EXPLORER_URLS, getNetworks, isEuCountry, EU_COUNTRIES } from "./shared";
 import { EU_COUNTRY_NAMES } from "./euIdentifiers";
-import type { AccountStatus, KycLevel, KycRegion, Wallet, OnrampSession } from "./types";
+import type { AccountStatus, KycLevel, KycRegion, Wallet, OnrampSession, CheckoutError } from "./types";
 import { EuKycStep } from "./EuKycStep";
+import { WalletOwnershipVerificationPanel } from "./WalletOwnershipVerificationPanel";
 
 export type WizardViewProps = {
   darkMode: boolean;
@@ -52,7 +58,7 @@ export type WizardViewProps = {
   onCheckAccount: (email: string) => Promise<void>;
   onRegister: (email: string, phone: string, country: string) => Promise<void>;
   onSubmitKycInfo: (info: KycInfo) => Promise<void>;
-  onRegisterWallet: (address: string, network: CryptoNetwork) => Promise<void>;
+  onRegisterWallet: (address: string, network: CryptoNetwork) => Promise<import("@stripe/crypto").CryptoConsumerWallet>;
   onDeleteWallet: (token: string) => Promise<void>;
   onCollectPaymentMethod: (
     types: string[],
@@ -62,8 +68,9 @@ export type WizardViewProps = {
   onAddFunds: (
     amount: string,
     currency: string,
+    sourceCurrency: string,
   ) => Promise<OnrampSession | null>;
-  onCheckout: (sessionId: string) => Promise<void>;
+  onCheckout: (sessionId: string) => Promise<void | CheckoutError>;
   onSelectWallet: (
     wallet: { wallet_address: string; network: string } | null,
   ) => void;
@@ -217,6 +224,13 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   const [adding, setAdding] = useState(false);
   const [deletingWalletId, setDeletingWalletId] = useState<string | null>(null);
 
+  // EU Travel Rule — wallet ownership verification (step 2)
+  const [walletVerifPhase, setWalletVerifPhase] = useState<'idle' | 'signing'>('idle');
+  const [walletChallenge, setWalletChallenge] = useState<WalletOwnershipChallenge | null>(null);
+  const [walletSig, setWalletSig] = useState('');
+  const [verifyingWallet, setVerifyingWallet] = useState(false);
+  const [pendingWalletInfo, setPendingWalletInfo] = useState<{ address: string; network: CryptoNetwork } | null>(null);
+
   // Step 3: Payment
   const paymentRef = useRef<HTMLDivElement>(null);
   const [payMounted, setPayMounted] = useState(false);
@@ -258,6 +272,8 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   const [selectedAmt, setSelectedAmt] = useState<string | null>("1");
   const [customAmt, setCustomAmt] = useState("");
   const [destCurrency, setDestCurrency] = useState("usdc");
+  const [sourceCurrency, setSourceCurrency] = useState<'usd' | 'eur'>(props.kycRegion === 'eu' ? 'eur' : 'usd');
+  const sourceCurrencySymbol = sourceCurrency === 'eur' ? '€' : '$';
   const [session, setSession] = useState<OnrampSession | null>(null);
   const [checkoutResult, setCheckoutResult] = useState<{
     status: string;
@@ -265,6 +281,21 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   } | null>(null);
   const [quoteSecondsLeft, setQuoteSecondsLeft] = useState<number | null>(null);
   const [refreshingQuote, setRefreshingQuote] = useState(false);
+
+  // Step 4: Wallet ownership verification state — triggered reactively when
+  // session creation or checkout returns wallet_ownership_verification_required.
+  const [sessionWalletVerifPhase, setSessionWalletVerifPhase] = useState<
+    'idle' | 'signing_for_session' | 'signing_for_checkout'
+  >('idle');
+  const [sessionWalletChallenge, setSessionWalletChallenge] = useState<WalletOwnershipChallenge | null>(null);
+  const [sessionWalletSig, setSessionWalletSig] = useState('');
+  const [verifyingSessionWallet, setVerifyingSessionWallet] = useState(false);
+  // Pending confirmation before starting the verification flow (iOS-style alert).
+  const [pendingWalletVerifConfirm, setPendingWalletVerifConfirm] = useState<{
+    phase: 'signing_for_session' | 'signing_for_checkout';
+    walletAddress: string;
+    network: CryptoNetwork;
+  } | null>(null);
 
   // ─── Quote expiration countdown + auto-refresh ────────
 
@@ -490,6 +521,54 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
     },
     [props.livemode],
   );
+
+  // ─── Wallet ownership signature submission (Step 4) ──
+
+  const handleSubmitSessionWalletSig = async () => {
+    if (!sessionWalletChallenge) return;
+    setVerifyingSessionWallet(true);
+    try {
+      await props.onramp.submitWalletOwnershipSignature({
+        challengeId: sessionWalletChallenge.challengeId,
+        signature: sessionWalletSig,
+      });
+      const phase = sessionWalletVerifPhase;
+      setSessionWalletVerifPhase('idle');
+      setSessionWalletChallenge(null);
+      setSessionWalletSig('');
+
+      if (phase === 'signing_for_session') {
+        // Retry session creation after ownership verified
+        const s = await props.onAddFunds(amount, destCurrency, sourceCurrency);
+        if (s) {
+          if (s.transaction_details?.last_error === 'wallet_ownership_verification_required') {
+            setError('Wallet ownership verification still required after signature submission.');
+            return;
+          }
+          setSession(s);
+          setBuySubStep('confirm');
+        }
+      } else if (phase === 'signing_for_checkout' && session) {
+        // Retry checkout after ownership verified
+        setBuySubStep('polling');
+        try {
+          const checkoutRes = await props.onCheckout(session.id);
+          if (checkoutRes?.code === 'wallet_ownership_required') {
+            setBuySubStep('confirm');
+            setError('Wallet ownership verification still required after signature submission.');
+            return;
+          }
+          await pollSession(session.id);
+        } catch {
+          setBuySubStep('confirm');
+        }
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'Wallet signature submission failed.');
+    } finally {
+      setVerifyingSessionWallet(false);
+    }
+  };
 
   // ─── Derived ──────────────────────────────────────────
 
@@ -1223,9 +1302,23 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                 onClick={async () => {
                   setAdding(true);
                   try {
-                    await props.onRegisterWallet(newAddr, newNet);
-                    setNewAddr("");
-                    await fetchWallets();
+                    const wallet = await props.onRegisterWallet(newAddr, newNet);
+                    if (props.kycRegion === 'eu' && !wallet.verified_ownership) {
+                      // EU Travel Rule: request a wallet ownership challenge only if
+                      // the wallet hasn't already been verified (e.g. re-added wallet).
+                      setPendingWalletInfo({ address: newAddr, network: newNet });
+                      try {
+                        const challenge = await props.onramp.getWalletOwnershipChallenge({ walletAddress: newAddr, network: newNet });
+                        setWalletChallenge(challenge);
+                        if (!livemode) setWalletSig('abcd');
+                        setWalletVerifPhase('signing');
+                      } catch (e: any) {
+                        props.setError(`Wallet challenge error: ${e?.message || e}`);
+                      }
+                    } else {
+                      setNewAddr('');
+                      await fetchWallets();
+                    }
                   } catch {}
                   setAdding(false);
                 }}
@@ -1235,6 +1328,39 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                 Add
               </Button>
             </Stack>
+            {walletVerifPhase === 'signing' && walletChallenge && (
+              <WalletOwnershipVerificationPanel
+                challenge={walletChallenge}
+                sig={walletSig}
+                onSigChange={setWalletSig}
+                onSubmit={async () => {
+                  if (!walletChallenge || !pendingWalletInfo) return;
+                  setVerifyingWallet(true);
+                  props.setError(null);
+                  try {
+                    props.log('EU Travel Rule: Submitting wallet ownership signature', `challengeId=${walletChallenge.challengeId}`);
+                    await props.onramp.submitWalletOwnershipSignature({ challengeId: walletChallenge.challengeId, signature: walletSig });
+                    props.log('EU Travel Rule: Wallet ownership verified');
+                    setWalletVerifPhase('idle');
+                    setWalletChallenge(null);
+                    setWalletSig('');
+                    setNewAddr('');
+                    setPendingWalletInfo(null);
+                    await fetchWallets();
+                  } catch (e: any) {
+                    props.setError(`Wallet ownership verification failed: ${e?.message || e}`);
+                  } finally {
+                    setVerifyingWallet(false);
+                  }
+                }}
+                loading={verifyingWallet}
+                livemode={livemode}
+                compact
+                colors={colors}
+                inputSx={inputSx}
+                accentButtonSx={accentButtonSx}
+              />
+            )}
           </Stack>
         );
 
@@ -1311,6 +1437,29 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
       // STEP 4: BUY
       // ═══════════════════════════════════════════════════
       case 4: {
+        // ── Wallet ownership verification overlay ──
+        if (sessionWalletVerifPhase !== 'idle' && sessionWalletChallenge) {
+          return (
+            <WalletOwnershipVerificationPanel
+              challenge={sessionWalletChallenge}
+              sig={sessionWalletSig}
+              onSigChange={setSessionWalletSig}
+              onSubmit={handleSubmitSessionWalletSig}
+              onCancel={() => {
+                setSessionWalletVerifPhase('idle');
+                setSessionWalletChallenge(null);
+                setSessionWalletSig('');
+                setBuySubStep('amount');
+              }}
+              loading={verifyingSessionWallet}
+              livemode={livemode}
+              colors={colors}
+              inputSx={inputSx}
+              accentButtonSx={accentButtonSx}
+            />
+          );
+        }
+
         // ── Result ──
         if (buySubStep === "result" && checkoutResult) {
           const network = session?.transaction_details.destination_network;
@@ -1471,7 +1620,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               <Stack spacing={1.5}>
                 <Row
                   label="You pay"
-                  value={`$${session.source_total_amount}`}
+                  value={`${sourceCurrencySymbol}${session.source_total_amount}`}
                 />
                 <Row
                   label="You receive"
@@ -1512,7 +1661,16 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                   onClick={async () => {
                     setBuySubStep("polling");
                     try {
-                      await props.onCheckout(session.id);
+                      const result = await props.onCheckout(session.id);
+                      if (result?.code === 'wallet_ownership_required') {
+                        setBuySubStep('confirm');
+                        setPendingWalletVerifConfirm({
+                          phase: 'signing_for_checkout',
+                          walletAddress: props.selectedWallet!,
+                          network: props.selectedWalletNetwork! as CryptoNetwork,
+                        });
+                        return;
+                      }
                       await pollSession(session.id);
                     } catch {
                       setBuySubStep("confirm");
@@ -1563,6 +1721,32 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
             </TextField>
 
             <ToggleButtonGroup
+              value={sourceCurrency}
+              exclusive
+              onChange={(_, v) => { if (v) setSourceCurrency(v); }}
+              size="small"
+              sx={{
+                "& .MuiToggleButton-root": {
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  color: colors.textSecondary,
+                  borderColor: colors.borderSubtle,
+                  "&.Mui-selected": {
+                    bgcolor: colors.accent,
+                    color: "#fff",
+                    borderColor: colors.accent,
+                    "&:hover": { bgcolor: colors.accentLight },
+                  },
+                  "&:hover": { bgcolor: colors.cardBgAlt },
+                },
+              }}
+            >
+              <ToggleButton value="usd">USD</ToggleButton>
+              <ToggleButton value="eur">EUR</ToggleButton>
+            </ToggleButtonGroup>
+
+            <ToggleButtonGroup
               value={selectedAmt}
               exclusive
               onChange={(_, v) => {
@@ -1590,7 +1774,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
             >
               {PRESET_AMOUNTS.map((a) => (
                 <ToggleButton key={a} value={a}>
-                  ${a}
+                  {sourceCurrencySymbol}{a}
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
@@ -1608,7 +1792,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Typography sx={{ color: colors.textMuted }}>$</Typography>
+                    <Typography sx={{ color: colors.textMuted }}>{sourceCurrencySymbol}</Typography>
                   </InputAdornment>
                 ),
               }}
@@ -1689,8 +1873,17 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               variant="contained"
               onClick={async () => {
                 if (!isAmountValid) return;
-                const s = await props.onAddFunds(amount, destCurrency);
+                const s = await props.onAddFunds(amount, destCurrency, sourceCurrency);
                 if (s) {
+                  if (s.transaction_details?.last_error === 'wallet_ownership_verification_required') {
+                    setSession(s);
+                    setPendingWalletVerifConfirm({
+                      phase: 'signing_for_session',
+                      walletAddress: props.selectedWallet!,
+                      network: props.selectedWalletNetwork! as CryptoNetwork,
+                    });
+                    return;
+                  }
                   setSession(s);
                   setBuySubStep("confirm");
                 }
@@ -1891,6 +2084,43 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
           {props.error}
         </Alert>
       </Snackbar>
+
+      {/* Wallet ownership verification confirmation dialog (iOS-style alert) */}
+      <Dialog
+        open={!!pendingWalletVerifConfirm}
+        onClose={() => setPendingWalletVerifConfirm(null)}
+      >
+        <DialogTitle>Wallet verification required</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This purchase requires you to verify ownership of the selected wallet before continuing.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingWalletVerifConfirm(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            sx={accentButtonSx}
+            onClick={async () => {
+              if (!pendingWalletVerifConfirm) return;
+              const { phase, walletAddress, network } = pendingWalletVerifConfirm;
+              setPendingWalletVerifConfirm(null);
+              try {
+                const challenge = await props.onramp.getWalletOwnershipChallenge({ walletAddress, network });
+                setSessionWalletChallenge(challenge);
+                if (!livemode) setSessionWalletSig('abcd');
+                setSessionWalletVerifPhase(phase);
+              } catch (e: any) {
+                setError(e?.message ?? 'Failed to get wallet ownership challenge.');
+              }
+            }}
+          >
+            Verify
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 };
