@@ -105,7 +105,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY).then(raw => {
       if (raw) {
         try {
-          setSettings(JSON.parse(raw));
+          setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
         } catch {
           // Ignore corrupt data — fall back to defaults.
         }
