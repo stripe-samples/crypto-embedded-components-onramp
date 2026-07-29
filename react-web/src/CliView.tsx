@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Typography } from "@mui/material";
 import type { KycInfo, CryptoNetwork } from "@stripe/crypto";
+import type { CheckoutError } from "./types";
 import { getNetworks, getExplorerUrl } from "./shared";
 import type { AccountStatus, KycLevel, Wallet, OnrampSession } from "./types";
 
@@ -46,7 +47,7 @@ export type CliViewProps = {
     amount: string,
     currency: string,
   ) => Promise<OnrampSession | null>;
-  onCheckout: (sessionId: string) => Promise<void>;
+  onCheckout: (sessionId: string) => Promise<void | CheckoutError>;
   onSelectWallet: (
     wallet: { wallet_address: string; network: string } | null,
   ) => void;
