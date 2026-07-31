@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
   ScrollView,
 } from 'react-native';
 import { Onramp } from '@stripe/stripe-react-native';
@@ -10,6 +10,8 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { refreshQuote, checkoutSession, QuoteResponse } from '../api/client';
 import { CURRENCY_NAMES, NETWORK_NAMES, SERVICE_TIMEOUT_ERROR } from '../constants';
+import ScreenScrollView from '../components/ScreenScrollView';
+import WalletOwnershipVerificationPanel from '../components/WalletOwnershipVerificationPanel';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
@@ -32,6 +34,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const {
     customerId, authToken, walletAddress, network, sessionId,
     sourceAmount, sourceCurrency, destinationCurrency, paymentLabel,
+    livemode,
   } = route.params;
 
   const [checking, setChecking] = useState(false);
@@ -207,48 +210,16 @@ export default function CheckoutScreen({ navigation, route }: Props) {
 
   if (walletVerifPhase === 'signing' && walletChallenge) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Verify Wallet Ownership</Text>
-        <Text style={styles.verifySubtitle}>
-          EU Travel Rule requires proof that you control this wallet.
-        </Text>
-
-        <Text style={styles.verifyLabel}>Challenge Message</Text>
-        <TextInput
-          style={[styles.verifyInput, styles.verifyInputMono, { minHeight: 100 }]}
-          value={walletChallenge.message}
-          editable={false}
-          multiline
-          selectTextOnFocus
+      <ScreenScrollView>
+        <WalletOwnershipVerificationPanel
+          challenge={walletChallenge}
+          sig={walletSig}
+          onSigChange={setWalletSig}
+          onSubmit={handleSubmitWalletSig}
+          loading={verifyingWallet}
+          livemode={livemode}
         />
-
-        <View style={styles.testCard}>
-          <Text style={styles.testCardText}>
-            Test mode: paste the challenge message above as the signature to pass verification.
-          </Text>
-        </View>
-
-        <Text style={styles.verifyLabel}>Signature</Text>
-        <TextInput
-          style={styles.verifyInput}
-          value={walletSig}
-          onChangeText={setWalletSig}
-          placeholder="Paste your signature here"
-          placeholderTextColor="#555"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <TouchableOpacity
-          style={[styles.button, (verifyingWallet || !walletSig) && styles.buttonDisabled]}
-          onPress={handleSubmitWalletSig}
-          disabled={verifyingWallet || !walletSig}
-        >
-          {verifyingWallet
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>Verify Ownership</Text>}
-        </TouchableOpacity>
-      </ScrollView>
+      </ScreenScrollView>
     );
   }
 
@@ -395,28 +366,4 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
-  // Wallet ownership verification styles
-  verifySubtitle: { fontSize: 14, color: '#888', marginBottom: 24 },
-  verifyLabel: { color: '#aaa', fontSize: 13, marginBottom: 8 },
-  verifyInput: {
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    color: '#fff',
-    fontSize: 15,
-    marginBottom: 24,
-  },
-  verifyInputMono: { fontFamily: 'Courier', fontSize: 13, color: '#ccc' },
-  testCard: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#2a2a4a',
-    marginBottom: 20,
-  },
-  testCardText: { color: '#7070cc', fontSize: 13, lineHeight: 18 },
 });

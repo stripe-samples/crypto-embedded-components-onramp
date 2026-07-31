@@ -612,6 +612,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         sourceCurrency,
         destinationCurrency: destCurrency,
         paymentLabel,
+        livemode,
       });
     } catch (err: any) {
       Alert.alert('Error', err.message);
@@ -643,6 +644,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         sourceCurrency: pendingSessionNavParams.sourceCurrency,
         destinationCurrency: pendingSessionNavParams.destinationCurrency,
         paymentLabel: pendingSessionNavParams.paymentLabel,
+        livemode,
       });
     } catch (err: any) {
       Alert.alert('Error', err.message);

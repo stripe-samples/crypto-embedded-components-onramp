@@ -120,6 +120,7 @@ export type RootStackParamList = {
     sourceCurrency: string;
     destinationCurrency: string;
     paymentLabel: string;
+    livemode: boolean;
   };
   Success: {
     transactionId?: string;
