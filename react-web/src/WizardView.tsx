@@ -79,6 +79,7 @@ export type WizardViewProps = {
   currentKycTier: "L0" | "L1" | "L2" | null;
   kycTiers: Array<{ tier: string; verification_status: string }>;
   limitSource: "api" | "local";
+  walletOwnershipVerification: boolean;
   log: (event: string, detail?: string) => void;
 };
 
@@ -155,6 +156,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
     kycTiers,
     polling,
     limitSource,
+    walletOwnershipVerification,
   } = props;
 
   const KYC_CHIP: Record<string, { color: string; label: string }> = {
@@ -1303,7 +1305,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                   setAdding(true);
                   try {
                     const wallet = await props.onRegisterWallet(newAddr, newNet);
-                    if (props.kycRegion === 'eu' && !wallet.verified_ownership) {
+                    if (props.kycRegion === 'eu' && !wallet.verified_ownership && walletOwnershipVerification) {
                       // EU Travel Rule: request a wallet ownership challenge only if
                       // the wallet hasn't already been verified (e.g. re-added wallet).
                       setPendingWalletInfo({ address: newAddr, network: newNet });
@@ -1662,7 +1664,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                     setBuySubStep("polling");
                     try {
                       const result = await props.onCheckout(session.id);
-                      if (result?.code === 'wallet_ownership_required') {
+                      if (result?.code === 'wallet_ownership_required' && walletOwnershipVerification) {
                         setBuySubStep('confirm');
                         setPendingWalletVerifConfirm({
                           phase: 'signing_for_checkout',
@@ -1875,7 +1877,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                 if (!isAmountValid) return;
                 const s = await props.onAddFunds(amount, destCurrency, sourceCurrency);
                 if (s) {
-                  if (s.transaction_details?.last_error === 'wallet_ownership_verification_required') {
+                  if (s.transaction_details?.last_error === 'wallet_ownership_verification_required' && walletOwnershipVerification) {
                     setSession(s);
                     setPendingWalletVerifConfirm({
                       phase: 'signing_for_session',
