@@ -54,8 +54,8 @@ export default function KYCScreen({ navigation, route }: Props) {
   const { customerId, authToken } = route.params;
   const { settings } = useSettings();
 
-  // L1/L2 collect SSN and DOB; L0 only collects name.
   const collectSensitiveFields = settings.kycTier !== 'L0';
+  const effectiveTier = settings.kycTier;
 
   const [form, setForm] = useState({
     firstName: '', lastName: '',
@@ -111,13 +111,16 @@ export default function KYCScreen({ navigation, route }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.tierBadge}>{settings.kycTier}</Text>
+      <View style={styles.badgeRow}>
+        <Text style={styles.tierBadge}>{effectiveTier}</Text>
+      </View>
       <Text style={styles.title}>Add your personal info</Text>
       <Text style={styles.subtitle}>
         {collectSensitiveFields
           ? 'Enter your name, SSN, and date of birth'
           : 'Enter your full name'}
       </Text>
+
 
       {/* Name — collected at every tier */}
       <Row label="First Name" value={form.firstName} onChange={set('firstName')} autoCapitalize="words" />
@@ -225,6 +228,7 @@ const s = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
   content: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32 },
+  badgeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   tierBadge: {
     alignSelf: 'flex-start',
     backgroundColor: '#1a1a2e',
@@ -236,7 +240,6 @@ const styles = StyleSheet.create({
     color: '#635BFF',
     fontSize: 12,
     fontWeight: '700',
-    marginBottom: 12,
   },
   title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#888', marginBottom: 24 },

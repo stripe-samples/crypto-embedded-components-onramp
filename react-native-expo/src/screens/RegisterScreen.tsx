@@ -9,6 +9,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { createAuthIntent, saveUser, getCryptoCustomer } from '../api/client';
+import { EU_COUNTRY_NAMES } from '../euIdentifiers';
 
 
 type Props = {
@@ -16,14 +17,14 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Register'>;
 };
 
+const countryFlag = (code: string) =>
+  [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
+
 const COUNTRIES = [
-  { code: 'US', label: 'US' },
-  { code: 'DE', label: 'DE' },
-  { code: 'FR', label: 'FR' },
-  { code: 'IT', label: 'IT' },
-  { code: 'NL', label: 'NL' },
-  { code: 'ES', label: 'ES' },
-  { code: 'GB', label: 'GB' },
+  { code: 'US', label: `${countryFlag('US')} US` },
+  ...Object.entries(EU_COUNTRY_NAMES)
+    .sort(([, a], [, b]) => a.localeCompare(b))
+    .map(([code]) => ({ code, label: `${countryFlag(code)} ${code}` })),
 ];
 
 export default function RegisterScreen({ navigation, route }: Props) {

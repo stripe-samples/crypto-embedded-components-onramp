@@ -37,6 +37,7 @@ export interface KycTierEntry {
 
 export interface CryptoCustomerResponse {
   customerId: string;
+  livemode: boolean;
   kyc_level: string;
   kyc_region: string | null;
   kycTiers: KycTierEntry[];
@@ -67,6 +68,7 @@ export interface WalletInfo {
   id: string;
   network: string;
   wallet_address: string;
+  verified_ownership?: boolean;
 }
 
 export interface WalletsResponse {
@@ -130,10 +132,17 @@ export interface TransactionLimitsResponse {
   };
 }
 
+export const WALLET_OWNERSHIP_VERIFICATION_REQUIRED = 'wallet_ownership_verification_required';
+
 export interface OnrampSessionResponse {
   id: string;
   client_secret: string;
   status?: string;
+  transaction_details?: {
+    last_error?: string;
+    wallet_address?: string;
+    destination_network?: string;
+  };
   /**
    * Present when the session requires additional verification before the
    * transaction can be processed.

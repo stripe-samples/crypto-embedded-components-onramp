@@ -13,13 +13,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { Onramp, useOnramp } from '@stripe/stripe-react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
-import { getCustomerWallets } from '../api/client';
+import { getCustomerWallets, getCryptoCustomer, WalletInfo } from '../api/client';
+import { useSettings } from '../context/SettingsContext';
+import ScreenScrollView from '../components/ScreenScrollView';
+import WalletOwnershipVerificationPanel from '../components/WalletOwnershipVerificationPanel';
 
 const NETWORKS: { label: string; value: Onramp.CryptoNetwork }[] = [
   { label: 'Ethereum', value: Onramp.CryptoNetwork.ethereum },
@@ -28,7 +31,7 @@ const NETWORKS: { label: string; value: Onramp.CryptoNetwork }[] = [
   { label: 'Base', value: Onramp.CryptoNetwork.base },
 ];
 
-type ExistingWallet = { id: string; network: string; wallet_address: string };
+type ExistingWallet = WalletInfo;
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Wallet'>;
@@ -37,6 +40,8 @@ type Props = {
 
 export default function WalletScreen({ navigation, route }: Props) {
   const { customerId, authToken } = route.params;
+  const [kycRegion, setKycRegion] = useState<string | null>(null);
+  const [livemode, setLivemode] = useState(true);
   const [existingWallets, setExistingWallets] = useState<ExistingWallet[]>([]);
   const [loadingWallets, setLoadingWallets] = useState(true);
   const [selectedWallet, setSelectedWallet] = useState<ExistingWallet | null>(null);
@@ -44,16 +49,29 @@ export default function WalletScreen({ navigation, route }: Props) {
   const [address, setAddress] = useState('');
   const [network, setNetwork] = useState<Onramp.CryptoNetwork>(Onramp.CryptoNetwork.ethereum);
   const [registering, setRegistering] = useState(false);
+  const [verifyPhase, setVerifyPhase] = useState<'idle' | 'signing'>('idle');
+  const [ownershipChallenge, setOwnershipChallenge] = useState<Onramp.WalletOwnershipChallenge | null>(null);
+  const [signature, setSignature] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [pendingNavParams, setPendingNavParams] = useState<{ address: string; network: string } | null>(null);
 
-  const { registerWalletAddress } = useOnramp();
+  const { registerWalletAddress, getWalletOwnershipChallenge, submitWalletOwnershipSignature } = useOnramp();
+  const { settings } = useSettings();
 
   useEffect(() => {
     (async () => {
-      const res = await getCustomerWallets(customerId, authToken);
-      if (res.success && res.data.data.length > 0) {
-        setExistingWallets(res.data.data);
+      const [walletsRes, customerRes] = await Promise.all([
+        getCustomerWallets(customerId, authToken),
+        getCryptoCustomer(customerId, authToken),
+      ]);
+      if (walletsRes.success && walletsRes.data.data.length > 0) {
+        setExistingWallets(walletsRes.data.data);
       } else {
         setShowAddNew(true);
+      }
+      if (customerRes.success) {
+        setKycRegion(customerRes.data.kyc_region);
+        setLivemode(customerRes.data.livemode);
       }
       setLoadingWallets(false);
     })();
@@ -66,6 +84,7 @@ export default function WalletScreen({ navigation, route }: Props) {
       authToken,
       walletAddress: selectedWallet.wallet_address,
       network: selectedWallet.network,
+      kycRegion: kycRegion ?? undefined,
     });
   };
 
@@ -81,16 +100,75 @@ export default function WalletScreen({ navigation, route }: Props) {
         Alert.alert('Error', result.error.message);
         return;
       }
-      navigation.navigate('PaymentMethod', {
-        customerId,
-        authToken,
-        walletAddress: address.trim(),
-        network,
-      });
+      if (kycRegion === 'eu' && settings.walletOwnershipVerification) {
+        // Re-fetch wallets to check if this wallet already has verified ownership
+        // (e.g. a previously verified address being re-added). The RN SDK's
+        // registerWalletAddress doesn't return the wallet object directly.
+        const walletsRes = await getCustomerWallets(customerId, authToken);
+        const registeredWallet = walletsRes.success
+          ? walletsRes.data.data.find((w: ExistingWallet) => w.wallet_address === address.trim())
+          : null;
+
+        if (registeredWallet?.verified_ownership) {
+          // Already verified — skip the challenge flow
+          navigation.navigate('PaymentMethod', {
+            customerId,
+            authToken,
+            walletAddress: address.trim(),
+            network,
+            kycRegion: kycRegion ?? undefined,
+          });
+          return;
+        }
+
+        try {
+          const challengeResult = await getWalletOwnershipChallenge(address.trim(), network);
+          if (challengeResult.error) {
+            Alert.alert('Error', challengeResult.error.message ?? 'Failed to get ownership challenge.');
+            return;
+          }
+          setOwnershipChallenge(challengeResult.challenge);
+          setPendingNavParams({ address: address.trim(), network });
+          setVerifyPhase('signing');
+        } catch (err: any) {
+          Alert.alert('Error', err.message);
+        }
+      } else {
+        navigation.navigate('PaymentMethod', {
+          customerId,
+          authToken,
+          walletAddress: address.trim(),
+          network,
+          kycRegion: kycRegion ?? undefined,
+        });
+      }
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
       setRegistering(false);
+    }
+  };
+
+  const handleSubmitSignature = async () => {
+    if (!ownershipChallenge || !pendingNavParams) return;
+    setVerifying(true);
+    try {
+      const result = await submitWalletOwnershipSignature(ownershipChallenge.challengeId, signature);
+      if (result?.error) {
+        Alert.alert('Error', result.error.message ?? 'Signature verification failed.');
+        return;
+      }
+      navigation.navigate('PaymentMethod', {
+        customerId,
+        authToken,
+        walletAddress: pendingNavParams.address,
+        network: pendingNavParams.network,
+        kycRegion: kycRegion ?? undefined,
+      });
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -99,14 +177,29 @@ export default function WalletScreen({ navigation, route }: Props) {
 
   if (loadingWallets) {
     return (
-      <View style={[styles.container, styles.center]}>
+      <View style={styles.center}>
         <ActivityIndicator color="#635BFF" size="large" />
       </View>
     );
   }
 
+  if (verifyPhase === 'signing' && ownershipChallenge) {
+    return (
+      <ScreenScrollView>
+        <WalletOwnershipVerificationPanel
+          challenge={ownershipChallenge}
+          sig={signature}
+          onSigChange={setSignature}
+          onSubmit={handleSubmitSignature}
+          loading={verifying}
+          livemode={livemode}
+        />
+      </ScreenScrollView>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenScrollView>
       {existingWallets.length > 0 && !showAddNew && (
         <>
           <Text style={styles.title}>Your wallets</Text>
@@ -188,14 +281,12 @@ export default function WalletScreen({ navigation, route }: Props) {
           )}
         </>
       )}
-    </ScrollView>
+    </ScreenScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0a' },
-  content: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32 },
-  center: { justifyContent: 'center', alignItems: 'center' },
+  center: { justifyContent: 'center', alignItems: 'center', flex: 1, backgroundColor: '#0a0a0a' },
   title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#888', marginBottom: 24 },
   label: { color: '#aaa', fontSize: 13, marginBottom: 8 },

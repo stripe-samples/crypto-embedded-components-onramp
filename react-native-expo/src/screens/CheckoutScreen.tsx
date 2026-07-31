@@ -3,12 +3,15 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
   ScrollView,
 } from 'react-native';
+import { Onramp } from '@stripe/stripe-react-native';
 import { useOnramp } from '../hooks/useOnramp';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { refreshQuote, checkoutSession, QuoteResponse } from '../api/client';
 import { CURRENCY_NAMES, NETWORK_NAMES, SERVICE_TIMEOUT_ERROR } from '../constants';
+import ScreenScrollView from '../components/ScreenScrollView';
+import WalletOwnershipVerificationPanel from '../components/WalletOwnershipVerificationPanel';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
@@ -23,6 +26,7 @@ function truncateAddress(addr: string): string {
 function formatCurrency(amount: string | number, currency: string): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   if (currency === 'usd') return `$${num.toFixed(2)}`;
+  if (currency === 'eur') return `€${num.toFixed(2)}`;
   return `${num} ${currency.toUpperCase()}`;
 }
 
@@ -30,6 +34,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const {
     customerId, authToken, walletAddress, network, sessionId,
     sourceAmount, sourceCurrency, destinationCurrency, paymentLabel,
+    livemode,
   } = route.params;
 
   const [checking, setChecking] = useState(false);
@@ -40,7 +45,17 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const [quoteRefreshDisabled, setQuoteRefreshDisabled] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { performCheckout } = useOnramp();
+  // Wallet ownership verification state — triggered when checkout returns
+  // wallet_ownership_verification_required.
+  const [walletVerifPhase, setWalletVerifPhase] = useState<'idle' | 'signing'>('idle');
+  const [walletChallenge, setWalletChallenge] = useState<Onramp.WalletOwnershipChallenge | null>(null);
+  const [walletSig, setWalletSig] = useState('');
+  const [verifyingWallet, setVerifyingWallet] = useState(false);
+  // Captures wallet address/network from the checkout response before throwing,
+  // so the confirmation alert can use the server-authoritative values.
+  const pendingVerifContextRef = useRef<{ walletAddress: string; network: string } | null>(null);
+
+  const { performCheckout, getWalletOwnershipChallenge, submitWalletOwnershipSignature } = useOnramp();
 
   const destCurrencyUpper = destinationCurrency.toUpperCase();
   const currencyName = CURRENCY_NAMES[destinationCurrency] ?? destCurrencyUpper;
@@ -100,6 +115,13 @@ export default function CheckoutScreen({ navigation, route }: Props) {
       const result = await performCheckout(sessionId, async () => {
         const res = await checkoutSession(sessionId, authToken);
         if (!res.success) throw new Error(res.error.message);
+        if (res.data.transaction_details?.last_error === 'wallet_ownership_verification_required') {
+          pendingVerifContextRef.current = {
+            walletAddress: res.data.transaction_details.wallet_address ?? walletAddress,
+            network: res.data.transaction_details.destination_network ?? network,
+          };
+          throw new Error('wallet_ownership_verification_required');
+        }
         return res.data.client_secret;
       });
 
@@ -121,10 +143,62 @@ export default function CheckoutScreen({ navigation, route }: Props) {
         destinationCurrency,
         customerId, authToken, walletAddress, network,
       });
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message === 'wallet_ownership_verification_required') {
+        setChecking(false);
+        setQuoteRefreshDisabled(false);
+        const verifAddress = pendingVerifContextRef.current?.walletAddress ?? walletAddress;
+        const verifNetwork = (pendingVerifContextRef.current?.network ?? network) as Onramp.CryptoNetwork;
+        pendingVerifContextRef.current = null;
+        Alert.alert(
+          'Wallet verification required',
+          'This purchase requires you to verify ownership of the selected wallet before continuing.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Verify',
+              onPress: async () => {
+                try {
+                  const challengeResult = await getWalletOwnershipChallenge(verifAddress, verifNetwork);
+                  if (challengeResult.error) {
+                    Alert.alert('Error', challengeResult.error.message ?? 'Failed to get ownership challenge.');
+                    return;
+                  }
+                  setWalletChallenge(challengeResult.challenge);
+                  setWalletVerifPhase('signing');
+                } catch (e: any) {
+                  Alert.alert('Error', e.message);
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
       Alert.alert('Checkout Failed', SERVICE_TIMEOUT_ERROR);
       setChecking(false);
       setQuoteRefreshDisabled(false);
+    }
+  };
+
+  const handleSubmitWalletSig = async () => {
+    if (!walletChallenge) return;
+    setVerifyingWallet(true);
+    try {
+      const result = await submitWalletOwnershipSignature(walletChallenge.challengeId, walletSig);
+      if (result?.error) {
+        Alert.alert('Error', result.error.message ?? 'Signature verification failed.');
+        return;
+      }
+      // Clear verification phase and retry checkout
+      setWalletVerifPhase('idle');
+      setWalletChallenge(null);
+      setWalletSig('');
+      await runCheckout();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setVerifyingWallet(false);
     }
   };
 
@@ -133,6 +207,21 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const transactionFee = parseFloat(quote?.fees?.transaction_fee_amount ?? '0');
   const totalFees = networkFee + transactionFee;
   const total = parseFloat(quote?.source_amount ?? sourceAmount) + totalFees;
+
+  if (walletVerifPhase === 'signing' && walletChallenge) {
+    return (
+      <ScreenScrollView>
+        <WalletOwnershipVerificationPanel
+          challenge={walletChallenge}
+          sig={walletSig}
+          onSigChange={setWalletSig}
+          onSubmit={handleSubmitWalletSig}
+          loading={verifyingWallet}
+          livemode={livemode}
+        />
+      </ScreenScrollView>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -276,4 +365,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
 });

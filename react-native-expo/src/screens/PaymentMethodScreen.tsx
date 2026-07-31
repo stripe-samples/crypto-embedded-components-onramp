@@ -111,6 +111,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
+import { Onramp } from '@stripe/stripe-react-native';
 import { useOnramp } from '../hooks/useOnramp';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -122,6 +123,8 @@ import {
 import { CURRENCIES_BY_NETWORK } from '../constants';
 import { useSettings } from '../context/SettingsContext';
 import { LOCAL_LIMITS, TransactionLimits } from '../kycLimits';
+import ScreenScrollView from '../components/ScreenScrollView';
+import WalletOwnershipVerificationPanel from '../components/WalletOwnershipVerificationPanel';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'PaymentMethod'>;
@@ -131,6 +134,7 @@ type Props = {
 export default function PaymentMethodScreen({ navigation, route }: Props) {
   const {
     customerId, authToken, walletAddress, network,
+    kycRegion,
     // Optional — passed back from KYCStepUpScreen after a step-up so the user
     // does not need to re-enter their amount or re-add their card.
     paymentToken: routePaymentToken,
@@ -142,6 +146,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const availableCurrencies = CURRENCIES_BY_NETWORK[network] ?? ['eth'];
   const [sourceAmount, setSourceAmount] = useState(routeSourceAmount ?? '10');
   const [destCurrency, setDestCurrency] = useState(routeDestCurrency ?? availableCurrencies[0]);
+  const [sourceCurrency, setSourceCurrency] = useState<'usd' | 'eur'>(kycRegion === 'eu' ? 'eur' : 'usd');
 
   // Pre-populate payment method if returning from a step-up verification.
   const [paymentReady, setPaymentReady] = useState(!!routePaymentToken);
@@ -150,6 +155,8 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const [collectingMethod, setCollectingMethod] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
   const [steppingUp, setSteppingUp] = useState(false);
+
+  const [livemode, setLivemode] = useState(true);
 
   // KYC tiers — fetched on mount and refreshed by the polling loop.
   const [kycTiers, setKycTiers] = useState<KycTierEntry[]>([]);
@@ -167,8 +174,22 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const [loadingLimits, setLoadingLimits] = useState(true);
   const [limitsError, setLimitsError] = useState<string | null>(null);
 
-  const { collectPaymentMethod, createCryptoPaymentToken } = useOnramp();
+  const { collectPaymentMethod, createCryptoPaymentToken, getWalletOwnershipChallenge, submitWalletOwnershipSignature } = useOnramp();
   const { settings } = useSettings();
+
+  // Wallet ownership verification state — triggered when session creation or
+  // checkout returns wallet_ownership_verification_required.
+  const [walletVerifPhase, setWalletVerifPhase] = useState<'idle' | 'signing'>('idle');
+  const [walletChallenge, setWalletChallenge] = useState<Onramp.WalletOwnershipChallenge | null>(null);
+  const [walletSig, setWalletSig] = useState('');
+  const [verifyingWallet, setVerifyingWallet] = useState(false);
+  const [pendingSessionNavParams, setPendingSessionNavParams] = useState<{
+    sessionId: string;
+    sourceAmount: string;
+    sourceCurrency: string;
+    destinationCurrency: string;
+    paymentLabel: string;
+  } | null>(null);
 
   // Derived from live kycTiers state — updates on initial fetch and on every
   // poll tick. Used to select the correct local limit tier and as a dependency
@@ -239,6 +260,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         const result = await getCryptoCustomer(customerId, authToken);
         if (cancelled || !mountedRef.current) return;
         if (result.success) {
+          setLivemode(result.data.livemode);
           const tiers = result.data.kycTiers ?? [];
           setKycTiers(tiers);
           const tierKey = deriveCurrentTier(tiers);
@@ -386,7 +408,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
       errorCode,
       currentTier: fromTier,
       walletAddress, network,
-      sourceAmount, sourceCurrency: 'usd',
+      sourceAmount, sourceCurrency,
       destinationCurrency: destCurrency,
       paymentToken: cryptoPaymentToken,
       paymentLabel,
@@ -463,7 +485,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         customerId, authToken,
         errorCode: nextErrorCode,
         currentTier: tier,
-        walletAddress, network, sourceAmount, sourceCurrency: 'usd',
+        walletAddress, network, sourceAmount, sourceCurrency,
         destinationCurrency: destCurrency, paymentToken: cryptoPaymentToken, paymentLabel,
       });
     } catch (err: any) {
@@ -507,7 +529,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         authToken,
         destinationNetwork: network,
         sourceAmount: amount,
-        sourceCurrency: 'usd',
+        sourceCurrency,
         destinationCurrency: destCurrency,
       });
 
@@ -527,13 +549,56 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
             customerId, authToken,
             errorCode: errorCode as typeof kycErrorCodes[number],
             currentTier: tier,
-            walletAddress, network, sourceAmount, sourceCurrency: 'usd',
+            walletAddress, network, sourceAmount, sourceCurrency,
             destinationCurrency: destCurrency, paymentToken: cryptoPaymentToken, paymentLabel,
           });
           return;
         }
 
         Alert.alert('Error', sessionResult.error.message);
+        return;
+      }
+
+      // Check for wallet ownership verification requirement
+      if (sessionResult.data.transaction_details?.last_error === 'wallet_ownership_verification_required') {
+        const pendingParams = {
+          sessionId: sessionResult.data.id,
+          sourceAmount,
+          sourceCurrency,
+          destinationCurrency: destCurrency,
+          paymentLabel,
+        };
+        if (!settings.walletOwnershipVerification) {
+          Alert.alert(
+            'Wallet Verification Required',
+            'EU checkout requires wallet ownership verification. Enable it in Settings to complete this purchase.',
+          );
+          return;
+        }
+        Alert.alert(
+          'Wallet verification required',
+          'This purchase requires you to verify ownership of the selected wallet before continuing.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Verify',
+              onPress: async () => {
+                try {
+                  const challengeResult = await getWalletOwnershipChallenge(walletAddress, network as Onramp.CryptoNetwork);
+                  if (challengeResult.error) {
+                    Alert.alert('Error', challengeResult.error.message ?? 'Failed to get ownership challenge.');
+                    return;
+                  }
+                  setWalletChallenge(challengeResult.challenge);
+                  setPendingSessionNavParams(pendingParams);
+                  setWalletVerifPhase('signing');
+                } catch (err: any) {
+                  Alert.alert('Error', err.message);
+                }
+              },
+            },
+          ],
+        );
         return;
       }
 
@@ -544,14 +609,47 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         network,
         sessionId: sessionResult.data.id,
         sourceAmount,
-        sourceCurrency: 'usd',
+        sourceCurrency,
         destinationCurrency: destCurrency,
         paymentLabel,
+        livemode,
       });
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
       setCreatingSession(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Wallet ownership signature submission
+  // ---------------------------------------------------------------------------
+
+  const handleSubmitWalletSig = async () => {
+    if (!walletChallenge || !pendingSessionNavParams) return;
+    setVerifyingWallet(true);
+    try {
+      const result = await submitWalletOwnershipSignature(walletChallenge.challengeId, walletSig);
+      if (result?.error) {
+        Alert.alert('Error', result.error.message ?? 'Signature verification failed.');
+        return;
+      }
+      navigation.navigate('Checkout', {
+        customerId,
+        authToken,
+        walletAddress,
+        network,
+        sessionId: pendingSessionNavParams.sessionId,
+        sourceAmount: pendingSessionNavParams.sourceAmount,
+        sourceCurrency: pendingSessionNavParams.sourceCurrency,
+        destinationCurrency: pendingSessionNavParams.destinationCurrency,
+        paymentLabel: pendingSessionNavParams.paymentLabel,
+        livemode,
+      });
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setVerifyingWallet(false);
     }
   };
 
@@ -597,12 +695,43 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   // Render
   // ---------------------------------------------------------------------------
 
+  if (walletVerifPhase === 'signing' && walletChallenge) {
+    return (
+      <ScreenScrollView>
+        <WalletOwnershipVerificationPanel
+          challenge={walletChallenge}
+          sig={walletSig}
+          onSigChange={setWalletSig}
+          onSubmit={handleSubmitWalletSig}
+          loading={verifyingWallet}
+          livemode={livemode}
+        />
+      </ScreenScrollView>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Add a payment method</Text>
 
+      {/* Source Currency picker */}
+      <Text style={styles.label}>Source Currency</Text>
+      <View style={styles.chipRow}>
+        {(['usd', 'eur'] as const).map(c => (
+          <TouchableOpacity
+            key={c}
+            style={[styles.chip, sourceCurrency === c && styles.chipSelected]}
+            onPress={() => setSourceCurrency(c)}
+          >
+            <Text style={[styles.chipText, sourceCurrency === c && styles.chipTextSelected]}>
+              {c.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {/* Amount input */}
-      <Text style={styles.label}>Amount (USD)</Text>
+      <Text style={styles.label}>Amount ({sourceCurrency.toUpperCase()})</Text>
       <TextInput
         style={[styles.input, exceedsLimit && styles.inputWarning]}
         value={sourceAmount}
@@ -763,8 +892,19 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
   content: { paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32 },
-  title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 24 },
+  title: { fontSize: 26, fontWeight: '700', color: '#fff', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: '#888', marginBottom: 24 },
   label: { color: '#aaa', fontSize: 13, marginBottom: 8 },
+  inputMono: { fontFamily: 'Courier', fontSize: 13, color: '#ccc' },
+  testCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2a2a4a',
+    marginBottom: 20,
+  },
+  testCardText: { color: '#7070cc', fontSize: 13, lineHeight: 18 },
   input: {
     backgroundColor: '#1a1a1a',
     borderWidth: 1,
