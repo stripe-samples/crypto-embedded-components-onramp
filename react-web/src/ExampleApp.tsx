@@ -590,6 +590,7 @@ const ExampleAppInner: React.FC<{
     [],
   );
 
+  const [walletOwnershipVerification, setWalletOwnershipVerification] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const t = getTheme(darkMode);
   const c = t.colors;
@@ -748,6 +749,26 @@ const ExampleAppInner: React.FC<{
                 </Typography>
               }
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={walletOwnershipVerification}
+                  onChange={(e) => setWalletOwnershipVerification(e.target.checked)}
+                  size="small"
+                  sx={{
+                    "& .MuiSwitch-switchBase.Mui-checked": { color: c.accent },
+                    "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                      bgcolor: c.accent,
+                    },
+                  }}
+                />
+              }
+              label={
+                <Typography sx={{ color: c.textSecondary, fontSize: "0.8rem" }}>
+                  EU Wallet Ownership Verification
+                </Typography>
+              }
+            />
             <TextField
               label="LAI Override"
               value={settingsLai ?? ""}
@@ -802,6 +823,7 @@ const ExampleAppInner: React.FC<{
             currentKycTier={currentKycTier}
             kycTiers={kycTiers}
             limitSource={limitSource}
+            walletOwnershipVerification={walletOwnershipVerification}
             log={log}
           />
         ) : (
