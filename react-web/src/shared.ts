@@ -1,6 +1,6 @@
 import type { CryptoNetwork } from "@stripe/crypto";
 
-export const NETWORKS_LIVE: CryptoNetwork[] = ["solana", "base", "sui", "tempo"];
+export const NETWORKS_LIVE: CryptoNetwork[] = ["solana", "base", "sui", "tempo", "celo" as CryptoNetwork];
 export const NETWORKS_TEST: CryptoNetwork[] = ["solana", "base"];
 
 export const getNetworks = (livemode: boolean): CryptoNetwork[] =>
@@ -24,6 +24,7 @@ export const EXPLORER_URLS: Record<
     base: (txId) => `https://basescan.org/tx/${txId}`,
     sui: (txId) => `https://suiscan.xyz/mainnet/tx/${txId}`,
     tempo: (txId) => `https://explore.tempo.xyz/tx/${txId}`,
+    celo: (txId) => `https://celoscan.io/tx/${txId}`,
   },
   test: {
     solana: (txId) => `https://solscan.io/tx/${txId}?cluster=devnet`,

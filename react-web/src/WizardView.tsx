@@ -1710,18 +1710,6 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               </Typography>
             </Box>
 
-            <TextField
-              select
-              label="Currency"
-              value={destCurrency}
-              onChange={(e) => setDestCurrency(e.target.value)}
-              size="small"
-              fullWidth
-              sx={inputSx}
-            >
-              <MenuItem value="usdc">USDC</MenuItem>
-            </TextField>
-
             <ToggleButtonGroup
               value={sourceCurrency}
               exclusive
@@ -1732,6 +1720,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                   textTransform: "none",
                   fontWeight: 600,
                   fontSize: "0.85rem",
+                  py: 0.75,
                   color: colors.textSecondary,
                   borderColor: colors.borderSubtle,
                   "&.Mui-selected": {
@@ -1747,6 +1736,19 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               <ToggleButton value="usd">USD</ToggleButton>
               <ToggleButton value="eur">EUR</ToggleButton>
             </ToggleButtonGroup>
+
+            <TextField
+              select
+              label="Crypto"
+              value={destCurrency}
+              onChange={(e) => setDestCurrency(e.target.value)}
+              size="small"
+              fullWidth
+              sx={inputSx}
+            >
+              <MenuItem value="usdc">USDC</MenuItem>
+              <MenuItem value="usdt">USDT</MenuItem>
+            </TextField>
 
             <ToggleButtonGroup
               value={selectedAmt}

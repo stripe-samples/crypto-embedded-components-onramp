@@ -43,6 +43,7 @@ export type CliViewProps = {
   onAddFunds: (
     amount: string,
     currency: string,
+    sourceCurrency: string,
   ) => Promise<OnrampSession | null>;
   onCheckout: (sessionId: string) => Promise<void | CheckoutError>;
   onSelectWallet: (
@@ -563,7 +564,7 @@ export const CliView: React.FC<CliViewProps> = (props) => {
             "cyan",
           );
           try {
-            const s = await props.onAddFunds(amount, currency);
+            const s = await props.onAddFunds(amount, currency, "usd");
             if (s) {
               setSession(s);
               const td = s.transaction_details;
