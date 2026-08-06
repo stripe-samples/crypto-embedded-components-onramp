@@ -1305,7 +1305,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                   setAdding(true);
                   try {
                     const wallet = await props.onRegisterWallet(newAddr, newNet);
-                    if (props.kycRegion === 'eu' && !wallet.verified_ownership && walletOwnershipVerification) {
+                    if (props.kycRegion === 'eu' && !(wallet as any).verified_ownership && walletOwnershipVerification) {
                       // EU Travel Rule: request a wallet ownership challenge only if
                       // the wallet hasn't already been verified (e.g. re-added wallet).
                       setPendingWalletInfo({ address: newAddr, network: newNet });
@@ -1747,7 +1747,6 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               sx={inputSx}
             >
               <MenuItem value="usdc">USDC</MenuItem>
-              <MenuItem value="usdt">USDT</MenuItem>
             </TextField>
 
             <ToggleButtonGroup

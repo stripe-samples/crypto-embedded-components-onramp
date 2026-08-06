@@ -406,7 +406,7 @@ const ExampleAppInner: React.FC<{
         );
         log(
           "Register wallet result",
-          `wallet_token=${response.id}, network=${response.network}, verified_ownership=${response.verified_ownership}`,
+          `wallet_token=${response.id}, network=${response.network}, verified_ownership=${(response as any).verified_ownership}`,
         );
         return response;
       } catch (e) {
