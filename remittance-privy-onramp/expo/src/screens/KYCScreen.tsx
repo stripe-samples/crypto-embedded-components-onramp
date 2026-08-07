@@ -52,7 +52,7 @@ function maskSSN(raw: string): string {
 }
 
 export default function KYCScreen({ navigation, route }: Props) {
-  const { customerId, authToken } = route.params;
+  const { customerId, authToken, walletAddress, network } = route.params;
   const { settings } = useSettings();
 
   // L1/L2 collect SSN and DOB; L0 only collects name.
@@ -98,6 +98,8 @@ export default function KYCScreen({ navigation, route }: Props) {
     navigation.navigate('Address', {
       customerId,
       authToken,
+      walletAddress,
+      network,
       firstName,
       lastName,
       ...(collectSensitiveFields

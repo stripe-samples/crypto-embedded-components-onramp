@@ -14,7 +14,7 @@ type CustomerVerification = {
 // Stripe API: GET https://api.stripe.com/v1/crypto/customers/{customerId}
 router.get('/onramp/customer/:customerId', async (req: Request, res: Response) => {
   try {
-    const user = db.getUserFromRequest(req);
+    const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const record = db.getRecord(user.email);
@@ -76,7 +76,7 @@ router.get('/onramp/customer/:customerId', async (req: Request, res: Response) =
 // tier. Higher tiers (more verification) yield higher limits.
 router.get('/onramp/limits', async (req: Request, res: Response) => {
   try {
-    const user = db.getUserFromRequest(req);
+    const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const record = db.getRecord(user.email);

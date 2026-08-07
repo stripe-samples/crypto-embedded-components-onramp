@@ -7,34 +7,46 @@
  *
  * ─── Recommended screen order and per-screen operations ─────────────────────
  *
- *  1. AuthScreen / RegisterScreen
- *       Operation : Link sign-in or account creation
- *       Produces  : customerId, authToken
- *       Next      : KYCPrimerScreen
+ *  1. AuthScreen
+ *       Operation : Privy app sign-in
+ *       Next      : TransferSetupScreen
  *
- *  2. KYCPrimerScreen
+ *  2. TransferSetupScreen
+ *       Operation : Collect transfer amount and recipient details
+ *       Produces  : authToken (Privy access token)
+ *       Next      : WalletScreen
+ *
+ *  3. WalletScreen
+ *       Operation : Create/reuse the user's Privy wallet and add delegated signer
+ *       API calls : attachRemittanceWallet()
+ *       Next      : PaymentMethodScreen
+ *
+ *  4. PaymentMethodScreen
+ *       Operation : Link sign-in or account creation, Stripe wallet registration
+ *       API calls : createAuthIntent(), saveUser(), getOnrampCustomer()
+ *       Decision  : route to KYCPrimerScreen only if initial KYC is needed,
+ *                   otherwise show payment method selection
+ *       Produces  : customerId
+ *       Next      : KYCPrimerScreen, or payment method selection on this screen
+ *
+ *  5. KYCPrimerScreen
  *       Operation : Show what information will be collected (consent screen)
  *       API calls : none
  *       Next      : KYCScreen
  *
- *  3. KYCScreen
+ *  6. KYCScreen
  *       Operation : Collect first name, last name
  *                   L1/L2: also collect SSN and date of birth
  *       API calls : none (data is held in navigation params)
  *       Next      : AddressScreen
  *
- *  4. AddressScreen
+ *  7. AddressScreen
  *       Operation : Collect home address
  *       API calls : attachKycInfo({ firstName, lastName, address [, idNumber, dob] })
  *                   L2 only: verifyIdentity() — captures government ID + selfie
- *       Next      : WalletScreen
+ *       Next      : PaymentMethodScreen
  *
- *  5. WalletScreen
- *       Operation : Prepare or reuse the user's remittance wallet
- *       API calls : prepareRemittanceWallet()
- *       Next      : PaymentMethodScreen (this screen)
- *
- *  6. PaymentMethodScreen  ◄── you are here
+ *  8. PaymentMethodScreen  ◄── you are here
  *       Operation : Select amount, destination currency, and payment card
  *       API calls : getOnrampCustomer()        — fetch kycTiers; poll if pending
  *                   getTransactionLimits()       — get limit for verified tier
@@ -48,7 +60,7 @@
  *
  * ─── Step-up loop (repeats until amount fits within the verified tier's limit) ──
  *
- *  7. KYCStepUpScreen
+ *  9. KYCStepUpScreen
  *       Operation : Collect only the incremental fields needed for the next tier
  *                   L0 → L1: attachKycInfo({ idNumber, dateOfBirth })
  *                   L1 → L2: verifyIdentity()
@@ -57,7 +69,7 @@
  *                   PaymentMethodScreen fetches fresh kycTiers, detects 'pending',
  *                   and polls until the new tier resolves.
  *
- *  8. PaymentMethodScreen (same screen, new instance)
+ * 10. PaymentMethodScreen (same screen, new instance)
  *       Operation : Re-check limits for the newly verified tier
  *       API calls : getOnrampCustomer() (poll), getTransactionLimits()
  *       Decision  :
@@ -66,13 +78,13 @@
  *
  * ─── Checkout ────────────────────────────────────────────────────────────────
  *
- *  9. CheckoutScreen
+ * 11. CheckoutScreen
  *       Operation : Display quote and fees; user confirms
  *       API calls : refreshQuote(), checkoutSession() (server-side for client_secret)
  *                   performCheckout() — Stripe SDK completes the transaction
  *       Next      : SuccessScreen
  *
- * 10. SuccessScreen
+ * 12. SuccessScreen
  *       Operation : Show transfer tracker
  *       Options   : "Start another transfer" → back to TransferSetupScreen (skips auth + identity)
  *                   "Start Over"   → back to HomeScreen
@@ -108,16 +120,18 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { RouteProp, useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, Alert, ScrollView, TextInput, Linking,
 } from 'react-native';
+import type { Onramp } from '@stripe/stripe-react-native';
+import { usePrivy, type User as PrivyUser } from '@privy-io/expo';
 import { useOnramp } from '../hooks/useOnramp';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import {
   createRemittance, getTransactionLimits, getOnrampCustomer,
-  KycTierEntry, deriveCurrentTier,
+  KycTierEntry, deriveCurrentTier, createAuthIntent, saveUser,
 } from '../api/client';
-import { CURRENCIES_BY_NETWORK } from '../constants';
+import { CURRENCIES_BY_NETWORK, MERCHANT_DISPLAY_NAME } from '../constants';
 import { useSettings } from '../context/SettingsContext';
 import { useTransfer } from '../context/TransferContext';
 import { LOCAL_LIMITS, TransactionLimits } from '../kycLimits';
@@ -128,9 +142,15 @@ type Props = {
   route: RouteProp<RootStackParamList, 'PaymentMethod'>;
 };
 
+function getPrivyEmail(user: PrivyUser | null | undefined) {
+  const account = user?.linked_accounts.find(linkedAccount => linkedAccount.type === 'email');
+  return account?.type === 'email' ? account.address : undefined;
+}
+
 export default function PaymentMethodScreen({ navigation, route }: Props) {
   const {
-    customerId, authToken, walletAddress, network,
+    customerId: routeCustomerId, authToken, walletAddress, network,
+    kycSubmitted,
     // Optional — passed back from KYCStepUpScreen after a step-up so the user
     // does not need to re-enter their amount or re-add their card.
     paymentToken: routePaymentToken,
@@ -146,6 +166,11 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const { transfer } = useTransfer();
   const [sourceAmount, setSourceAmount] = useState(routeSourceAmount ?? transfer.amountUsd);
   const [destCurrency, setDestCurrency] = useState(initialDestCurrency);
+  const [customerId, setCustomerId] = useState(routeCustomerId ?? '');
+  const [walletRegistered, setWalletRegistered] = useState(false);
+  const [needsNewLinkAccount, setNeedsNewLinkAccount] = useState(false);
+  const [phone, setPhone] = useState('+1');
+  const [preparingPayment, setPreparingPayment] = useState(false);
 
   // Pre-populate payment method if returning from a step-up verification.
   const [paymentReady, setPaymentReady] = useState(!!routePaymentToken);
@@ -171,7 +196,16 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const [loadingLimits, setLoadingLimits] = useState(true);
   const [limitsError, setLimitsError] = useState<string | null>(null);
 
-  const { collectPaymentMethod, createCryptoPaymentToken } = useOnramp();
+  const {
+    collectPaymentMethod,
+    createCryptoPaymentToken,
+    configure,
+    hasLinkAccount,
+    registerLinkUser,
+    authorize,
+    registerWalletAddress,
+  } = useOnramp();
+  const { user: privyUser } = usePrivy();
   const { settings } = useSettings();
 
   // Derived from live kycTiers state — updates on initial fetch and on every
@@ -216,6 +250,10 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
     if (routeDestCurrency) setDestCurrency(routeDestCurrency);
   }, [routeDestCurrency]);
 
+  useEffect(() => {
+    if (routeCustomerId) setCustomerId(routeCustomerId);
+  }, [routeCustomerId]);
+
   // ---------------------------------------------------------------------------
   // KYC verification polling
   //
@@ -224,6 +262,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   // ---------------------------------------------------------------------------
 
   const startPolling = useCallback(() => {
+    if (!customerId) return;
     if (pollTimerRef.current) return; // Already running
 
     setVerifyingKyc(true);
@@ -271,6 +310,14 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
     useCallback(() => {
       let cancelled = false;
 
+      if (!customerId || !walletRegistered) {
+        setLoadingTiers(false);
+        setVerifyingKyc(false);
+        return () => {
+          cancelled = true;
+        };
+      }
+
       // Cancel any stale polling timer from a previous focus session.
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
@@ -303,7 +350,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           pollTimerRef.current = null;
         }
       };
-    }, [customerId, authToken, startPolling]),
+    }, [customerId, authToken, startPolling, walletRegistered]),
   );
 
   // ---------------------------------------------------------------------------
@@ -319,14 +366,17 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   useEffect(() => {
     // Wait until tiers are resolved and not mid-polling so we fetch the limit
     // for the customer's actual verified tier, not a still-pending one.
-    if (currentTier === null || verifyingKyc) return;
+    if (!walletRegistered || currentTier === null || verifyingKyc) {
+      if (!walletRegistered) setLoadingLimits(false);
+      return;
+    }
 
     (async () => {
       setLoadingLimits(true);
       setLimitsError(null);
       try {
         if (settings.limitSource === 'api') {
-          // Fetch live limits from Stripe. The API uses the customer's auth token
+          // Fetch live limits from Stripe. The backend uses the Privy access token
           // to return limits for their current verified tier server-side.
           // Backend API: GET /v1/onramp/limits
           // Response: { limits: { "usd.fiat": { card: [{ limit, settlement_speed }] } } }
@@ -356,7 +406,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         setLoadingLimits(false);
       }
     })();
-  }, [authToken, walletAddress, network, settings.limitSource, currentTier, verifyingKyc]);
+  }, [authToken, walletAddress, network, settings.limitSource, currentTier, verifyingKyc, walletRegistered]);
 
   // ---------------------------------------------------------------------------
   // Re-enter KYC after rejection
@@ -373,7 +423,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
     if (!rejectedEntry) return;
 
     if (rejectedEntry.tier === 'l0') {
-      navigation.navigate('KYCPrimer', { customerId, authToken });
+      navigation.navigate('KYCPrimer', { customerId, authToken, walletAddress, network });
       return;
     }
 
@@ -395,6 +445,116 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         paymentToken: cryptoPaymentToken,
       paymentLabel,
     });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Link authorization and Stripe wallet registration
+  // ---------------------------------------------------------------------------
+
+  const handlePreparePayment = async () => {
+    const email = getPrivyEmail(privyUser);
+    if (!email) {
+      Alert.alert('Error', 'Sign in with an email address before continuing.');
+      return;
+    }
+
+    setPreparingPayment(true);
+    try {
+      let nextCustomerId = customerId;
+
+      const configResult = await configure({
+        merchantDisplayName: MERCHANT_DISPLAY_NAME,
+        appearance: { style: 'AUTOMATIC' },
+      });
+      if (configResult.error) {
+        throw new Error(configResult.error.message);
+      }
+
+      if (!nextCustomerId) {
+        const linkResult = await hasLinkAccount(email);
+        if (linkResult.error) {
+          throw new Error(linkResult.error.message);
+        }
+
+        if (!linkResult.hasLinkAccount) {
+          if (!needsNewLinkAccount) {
+            setNeedsNewLinkAccount(true);
+            return;
+          }
+          if (!phone.trim() || phone === '+1') {
+            Alert.alert('Error', 'Please enter your phone number.');
+            return;
+          }
+
+          const registerResult = await registerLinkUser({
+            email,
+            phone: phone.trim(),
+            country: 'US',
+          });
+          if (registerResult.error) {
+            throw new Error(registerResult.error.message);
+          }
+        }
+
+        const intentResult = await createAuthIntent(authToken);
+        if (!intentResult.success) {
+          throw new Error(intentResult.error.message);
+        }
+
+        const authResult = await authorize(intentResult.data.authIntentId);
+        if (authResult.error) {
+          throw new Error(authResult.error.message);
+        }
+        if (authResult.status === 'Denied') {
+          Alert.alert('Denied', 'You must consent to continue.');
+          return;
+        }
+        if (authResult.status !== 'Consented' || !authResult.customerId) {
+          Alert.alert('Canceled', 'Authorization was canceled.');
+          return;
+        }
+
+        nextCustomerId = authResult.customerId;
+        const saveRes = await saveUser(nextCustomerId, authToken);
+        if (!saveRes.success) {
+          throw new Error(saveRes.error.message);
+        }
+        setCustomerId(nextCustomerId);
+      }
+
+      const customerRes = await getOnrampCustomer(nextCustomerId, authToken);
+      if (!customerRes.success) {
+        throw new Error(customerRes.error.message);
+      }
+      const l1Status = customerRes.data.kycTiers.find(tier => tier.tier === 'l1')?.verification_status;
+      const l2Status = customerRes.data.kycTiers.find(tier => tier.tier === 'l2')?.verification_status;
+      const hasVerifiedIdentityTier = l1Status === 'verified' || l2Status === 'verified';
+
+      if (!hasVerifiedIdentityTier && settings.kycTier !== 'L0' && !kycSubmitted) {
+        navigation.navigate('KYCPrimer', {
+          customerId: nextCustomerId,
+          authToken,
+          walletAddress,
+          network,
+        });
+        return;
+      }
+
+      const registration = await registerWalletAddress(
+        walletAddress,
+        network as Onramp.CryptoNetwork,
+      );
+      if (registration?.error) {
+        throw new Error(registration.error.message);
+      }
+
+      setWalletRegistered(true);
+      setNeedsNewLinkAccount(false);
+    } catch (err: unknown) {
+      Alert.alert('Error', errorMessage(err));
+    } finally {
+      setPreparingPayment(false);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -573,10 +733,11 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   const currentTierEntry = currentTierKey ? kycTiers.find(t => t.tier === currentTierKey) : undefined;
   const currentTierStatus = currentTierEntry?.verification_status;
 
-  // True while tiers are loading or polling — button is disabled in this state.
-  const isKycPending = loadingTiers || verifyingKyc;
+  // Initial tier loading is bookkeeping. Only show user-facing status when
+  // Stripe is actually reviewing submitted identity information.
+  const isKycPending = verifyingKyc;
   // True when the current tier's review came back rejected.
-  const isKycRejected = !isKycPending && currentTierStatus === 'rejected';
+  const isKycRejected = !loadingTiers && !isKycPending && currentTierStatus === 'rejected';
 
   // Button label and style depend on KYC status and whether amount exceeds limit.
   const buttonLabel = isKycPending
@@ -596,11 +757,65 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
   // Payment method required for all flows except re-entering KYC after rejection.
   // loadingLimits is included so the button stays disabled while limits refresh
   // after a pending verification resolves (prevents proceeding with stale limits).
-  const buttonDisabled = isKycPending || loadingLimits || busy || (!isKycRejected && !paymentReady);
+  const buttonDisabled = loadingTiers || isKycPending || loadingLimits || busy || (!isKycRejected && !paymentReady);
 
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  if (!walletRegistered) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Payment method</Text>
+        <Text style={styles.subtitle}>
+          Select how you want to pay. You will review the transfer details before confirming.
+        </Text>
+
+        <Text style={styles.label}>Payment method</Text>
+
+        {needsNewLinkAccount ? (
+          <>
+            <Text style={styles.label}>Phone number</Text>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="+12125551234"
+              placeholderTextColor="#555"
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              editable={!preparingPayment}
+            />
+            <Text style={styles.terms}>
+              By continuing you agree to the{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL('https://link.com/terms/crypto-onramp')}>
+                Link terms
+              </Text>
+              .
+            </Text>
+          </>
+        ) : null}
+
+        <TouchableOpacity
+          style={[
+            needsNewLinkAccount ? styles.button : styles.addMethodButton,
+            preparingPayment && styles.buttonDisabled,
+          ]}
+          disabled={preparingPayment}
+          onPress={handlePreparePayment}
+        >
+          {preparingPayment
+            ? <ActivityIndicator color={needsNewLinkAccount ? '#fff' : '#635BFF'} />
+            : (
+              <Text style={needsNewLinkAccount ? styles.buttonText : styles.addMethodText}>
+                {needsNewLinkAccount ? 'Create Link account' : 'Continue with Link'}
+              </Text>
+            )}
+        </TouchableOpacity>
+
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -621,10 +836,10 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
                 : exceedsLimit
                   ? 'More information needed'
                   : limitsError
-                    ? 'Eligibility unavailable'
-                    : 'Checking transfer eligibility'}
+                    ? 'Transfer limits unavailable'
+                    : 'Checking identity status'}
             </Text>
-            {isKycPending || loadingLimits ? <ActivityIndicator color="#635BFF" size="small" /> : null}
+            {isKycPending ? <ActivityIndicator color="#635BFF" size="small" /> : null}
           </View>
           <Text style={styles.statusBody}>
             {isKycRejected
@@ -633,7 +848,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
                 ? 'This amount is above the current transfer limit. A quick identity step-up unlocks higher limits.'
                 : limitsError
                   ? limitsError
-                  : 'The developer app is confirming this transfer can proceed.'}
+                  : 'Stripe is checking whether this transfer needs more information.'}
           </Text>
         </View>
       ) : null}
@@ -706,6 +921,19 @@ const styles = StyleSheet.create({
   },
   statusTitle: { color: '#fff', fontSize: 14, fontWeight: '800' },
   statusBody: { color: '#aaa', fontSize: 13, lineHeight: 18 },
+  input: {
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  terms: { color: '#777', fontSize: 12, lineHeight: 18 },
+  link: { color: '#8b85ff' },
 
   // KYC tier card
   tierCard: {

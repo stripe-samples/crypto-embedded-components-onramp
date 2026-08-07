@@ -8,7 +8,6 @@ import { TransferProvider } from '../context/TransferContext';
 import HomeScreen from '../screens/HomeScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import AuthScreen from '../screens/AuthScreen';
-import RegisterScreen from '../screens/RegisterScreen';
 import KYCPrimerScreen from '../screens/KYCPrimerScreen';
 import KYCScreen from '../screens/KYCScreen';
 import AddressScreen from '../screens/AddressScreen';
@@ -39,7 +38,6 @@ export default function AppNavigator() {
           <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Demo Settings' }} />
           <Stack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign In' }} />
-          <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Create Account' }} />
           <Stack.Screen name="KYCPrimer" component={KYCPrimerScreen} options={{ title: 'Verify Identity' }} />
           <Stack.Screen name="KYC" component={KYCScreen} options={{ title: 'Personal Info' }} />
           <Stack.Screen name="Address" component={AddressScreen} options={{ title: 'Home Address' }} />

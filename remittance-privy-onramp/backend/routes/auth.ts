@@ -17,37 +17,11 @@ type LinkTokenResponse = StripeApiData & {
   };
 };
 
-// Sign up a new user with email and password
-router.post('/signup', (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
-
-  const token = db.createUser(email, password);
-  if (!token) return res.status(400).json({ error: 'Email already registered' });
-
-  console.log(`[auth] signup: ${email}`);
-  res.json({ token });
-});
-
-// Log in an existing user
-router.post('/login', (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  const record = db.getRecord(email);
-  if (!record) {
-    return res.status(404).json({ error: 'Account not found. Please sign up first.' });
-  }
-  const token = db.authenticateUser(email, password);
-  if (!token) return res.status(401).json({ error: 'Incorrect password' });
-
-  console.log(`[auth] login: ${email}`);
-  res.json({ token });
-});
-
 // Create a LinkAuthIntent for OAuth authorization
 // Stripe API: POST https://login.link.com/v1/link_auth_intent
 router.post('/create', async (req: Request, res: Response) => {
   try {
-    const user = db.getUserFromRequest(req);
+    const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const { oauth_scopes } = req.body;
@@ -79,7 +53,7 @@ router.post('/create', async (req: Request, res: Response) => {
 // Stripe API: POST https://login.link.com/v1/link_auth_intent/{authIntentId}/tokens
 router.post('/save_user', async (req: Request, res: Response) => {
   try {
-    const user = db.getUserFromRequest(req);
+    const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const { crypto_customer_id } = req.body;

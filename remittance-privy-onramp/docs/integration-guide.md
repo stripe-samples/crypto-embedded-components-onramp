@@ -11,53 +11,59 @@ For the product model and flow of funds, see the [recipe overview](stablecoin-re
 Start with the official docs for the underlying products:
 
 - [Stripe Embedded Components Onramp integration guide](https://docs.stripe.com/crypto/onramp/embedded-components-integration-guide)
-- [Privy server-side user wallets](https://docs.privy.io/recipes/wallets/server-side-user-wallets)
-- [Privy delegated permissions](https://docs.privy.io/controls/common-use-cases/delegation)
+- [Privy React Native setup](https://docs.privy.io/basics/react-native/setup)
+- [Privy React Native quickstart](https://docs.privy.io/basics/react-native/quickstart)
+- [Privy user and server signers](https://docs.privy.io/recipes/wallets/user-and-server-signers)
 - [Privy wallet policies](https://docs.privy.io/controls/policies/overview)
 - [Privy gas sponsorship](https://docs.privy.io/wallets/gas-and-asset-management/gas/overview)
 
-The Stripe docs cover the normal Onramp flow: Link auth, wallet registration, quotes, checkout, and fulfillment. The Privy docs cover wallet creation, delegated authority, policies, and gas sponsorship.
+The Stripe docs cover the normal Onramp flow: Link auth, wallet registration, quotes, checkout, and fulfillment. The Privy docs cover app auth, embedded wallet creation, delegated signers, policies, and gas sponsorship.
 
 This guide assumes you are building a flow like:
 
 1. Alice wants to send value to Bob.
-2. Alice signs in to the developer app and authorizes with Link for Stripe Onramp.
-3. The developer app creates or reuses Alice's Privy wallet.
-4. Stripe Onramp delivers USDC to Alice's wallet.
-5. The developer app either holds USDC in Alice's wallet or moves it onward through a payout/offramp route.
+2. Alice signs in to the developer app with Privy.
+3. Alice enters transfer details.
+4. Alice consents to creating or reusing her Privy wallet and adding the app backend signer under a remittance policy.
+5. Alice continues with Link when she is ready to pay.
+6. Stripe Onramp delivers USDC to Alice's wallet.
+7. The developer app either holds USDC in Alice's wallet or moves it onward through a payout/offramp route.
 
 ## Step 1: Authenticate The Sender
 
-Use your own app authentication for the sender. Use Link for the Stripe Onramp transaction.
+Use Privy auth for the sender in this sample. Use Link for the Stripe Onramp transaction.
 
 Keep those concepts separate:
 
-- App auth identifies Alice inside the developer app.
+- Privy app auth identifies Alice inside the developer app and controls her embedded wallet session.
 - Link auth identifies Alice for Stripe Onramp.
 - The backend stores the mapping needed to create Onramp sessions for the Link-authenticated Onramp user.
 
-In this sample, the backend creates a Link auth intent and later stores the Link-authenticated Onramp user. A production app should follow the Stripe Embedded Components Onramp guide for the exact Link auth flow.
+The mobile app signs Alice in with Privy email OTP and sends the Privy access token as the bearer token on backend requests. The backend verifies that Privy token on each authenticated request and uses the verified Privy user as the app user identity.
+
+Do not make Link feel like a second app sign-in step. In this sample, Link is presented from the payment method screen, when Alice is ready to pay. The backend creates a Link auth intent and later stores the Link-authenticated Onramp user after Alice consents in Link. A production app should follow the Stripe Embedded Components Onramp guide for the exact Link auth flow.
 
 ## Step 2: Create Or Reuse The Sender Wallet
 
-Use Privy's server-side wallet APIs to create or retrieve a wallet for the authenticated app user.
+Use Privy's client SDK to create or retrieve a wallet for the authenticated app user.
 
 The remittance-specific decision is that this wallet becomes the Stripe Onramp destination. Stripe delivers USDC into the sender's wallet; the developer app controls the post-delivery wallet experience.
 
-Privy's server-side user wallet recipe shows custom authentication with app-issued JWTs. That is a good fit when a developer already has an auth system and wants Privy to verify the app's user identity directly. It is not strictly required for this recipe. Developers can also use Privy auth, such as a linked email account, then create the wallet and configure delegated signer/policy controls server-side.
+This sample uses Privy auth with a linked email account so it can run without custom auth/JWT setup. Privy custom auth is a production variant when a developer already has an auth system and wants Privy to verify the app's user identity directly.
 
-This sample keeps the setup minimal and uses Privy auth with a linked email account. A production app can choose either model:
-
-- Use Privy auth when you want Privy to authenticate users through linked accounts such as email or social login.
-- Use custom auth when you want Privy to authenticate users with JWTs issued by your existing auth system.
-
-The app should collect clear user consent before creating or configuring wallet authority. In this recipe, Alice should understand that:
+The mobile app should collect clear user consent before creating or configuring wallet authority. In this recipe, Alice should understand that:
 
 - A non-custodial wallet is created or reused for her.
 - Stripe Onramp will deliver USDC to that wallet.
 - The developer app may use delegated authority to move USDC from that wallet for the disclosed remittance flow.
 
-The backend should keep Privy internals server-side. The mobile app only needs the wallet address and network:
+On consent, the app uses Privy's React Native SDK to:
+
+- Create or reuse Alice's embedded Ethereum wallet.
+- Call `addSigners` with the backend signer ID and remittance policy ID.
+- Send the wallet address, Privy user ID, and Privy wallet ID to the backend.
+
+The backend verifies that the wallet belongs to Alice's Privy user and stores the mapping:
 
 ```json
 {
@@ -67,13 +73,15 @@ The backend should keep Privy internals server-side. The mobile app only needs t
 }
 ```
 
-Keep Privy user IDs, wallet IDs, signer IDs, policy IDs, and authorization keys on the backend.
+The backend authorization private key stays server-side. The signer ID and policy ID are public identifiers used by the client to grant delegated authority; they are not secrets.
 
 ## Step 3: Register The Wallet With Stripe Onramp
 
-Before creating the Onramp session, register the sender's wallet address with Stripe Onramp through the Stripe SDK.
+Before creating the Onramp session, register the sender's wallet address with Stripe Onramp through the Stripe SDK. In this sample, wallet registration happens from the payment method screen after Link has authorized the Onramp user.
 
 This is standard Onramp behavior covered by the Stripe Embedded Components Onramp guide. The only recipe-specific part is where the address comes from: the registered address is Alice's Privy wallet address from Step 2.
+
+If Stripe Onramp requires more identity information, keep that as a focused KYC flow. This sample routes Alice from the payment method screen into the KYC screens only when needed, then returns to payment method selection.
 
 ## Step 4: Create The Onramp Session
 
@@ -145,6 +153,10 @@ The Expo app reads client configuration from `expo/.env`:
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 EXPO_PUBLIC_API_URL=http://localhost:3001
 EXPO_PUBLIC_ONRAMP_NETWORK=tempo
+EXPO_PUBLIC_PRIVY_APP_ID=...
+EXPO_PUBLIC_PRIVY_CLIENT_ID=...
+EXPO_PUBLIC_PRIVY_WALLET_SIGNER_ID=...
+EXPO_PUBLIC_PRIVY_WALLET_POLICY_IDS=...
 ```
 
 The backend reads server configuration from `backend/.env`. It needs Stripe credentials:
@@ -161,10 +173,10 @@ It also needs Privy credentials:
 PRIVY_APP_ID=...
 PRIVY_APP_SECRET=...
 PRIVY_APP_AUTHORIZATION_PRIVATE_KEY=...
-PRIVY_WALLET_SIGNER_ID=...
-PRIVY_WALLET_POLICY_IDS=...
 PRIVY_SPONSOR_GAS=true
 ```
+
+The sample backend verifies Privy access tokens with Privy's JWKS-backed SDK verifier. You do not need to provide a separate Privy public verification key. The Privy signer ID and policy IDs are configured in the Expo app because the sender grants delegated authority from the client.
 
 And the downstream transfer configuration:
 
@@ -187,7 +199,7 @@ This sample is one implementation of the recipe. The main integration points are
 | Mobile API client | `expo/src/api/client.ts` |
 | Stripe React Native SDK wrapper | `expo/src/hooks/useOnramp.ts` |
 | Backend entrypoint | `backend/server.ts` |
-| Link auth and sample app auth | `backend/routes/auth.ts` |
+| Link auth and saved Onramp user state | `backend/routes/auth.ts` |
 | Onramp customer and limits helpers | `backend/routes/onramp.ts` |
 | Wallet, remittance, fulfillment, payout handoff | `backend/routes/remittances.ts` |
 | In-memory sample storage | `backend/db/store.ts` |
@@ -196,13 +208,11 @@ The sample backend exposes these routes:
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/v1/auth/signup` | Create a sample app user |
-| POST | `/v1/auth/login` | Authenticate a sample app user |
 | POST | `/v1/auth/create` | Create a LinkAuthIntent |
 | POST | `/v1/auth/save_user` | Store crypto customer ID and Link OAuth tokens |
 | GET | `/v1/onramp/customer/:id` | Read Onramp customer/KYC status |
 | GET | `/v1/onramp/limits` | Read Onramp transaction limits |
-| POST | `/v1/remittance_wallet` | Create or reuse the sender's Privy wallet |
+| POST | `/v1/remittance_wallet` | Attach and verify the sender's client-created Privy wallet |
 | POST | `/v1/remittances` | Create a Stripe Onramp session and local remittance |
 | POST | `/v1/remittances/:remittanceId/quote` | Refresh the Onramp quote |
 | POST | `/v1/remittances/:remittanceId/checkout` | Complete checkout and return SDK client secret |
@@ -213,10 +223,11 @@ The sample backend exposes these routes:
 ## Production Checklist
 
 - Replace the in-memory store with durable storage.
+- Verify Privy access tokens on every privileged backend request.
 - Verify Stripe webhook signatures.
 - Make backend state transitions idempotent.
 - Store user consent records for wallet creation and delegated wallet actions.
-- Keep Privy identifiers, signer IDs, policy IDs, and authorization keys server-side.
+- Keep Privy authorization keys server-side.
 - Scope Privy delegated signer and policy controls as narrowly as possible.
 - Do not depend on the foreground mobile app to advance funds after Onramp fulfillment.
 - Track downstream payout/offramp status separately from Stripe Onramp status.

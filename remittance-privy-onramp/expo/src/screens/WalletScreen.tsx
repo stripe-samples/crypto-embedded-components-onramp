@@ -1,10 +1,10 @@
 /**
- * WalletScreen - developer backend prepares the remittance wallet.
+ * WalletScreen - the user authorizes wallet setup for this remittance.
  *
- * The app does not create Privy users, create wallets, or configure delegation.
- * It asks the developer backend for a remittance wallet, registers that address
- * with the Link-authenticated Onramp user, and then uses the returned address
- * as the Stripe Onramp destination.
+ * The app creates or reuses the user's Privy embedded wallet on device, adds
+ * the backend signer/policy the user consents to, and attaches that wallet to
+ * the backend. Stripe Onramp wallet registration happens later, after Link
+ * authorizes the payment customer.
  */
 import React, { useState } from 'react';
 import {
@@ -13,11 +13,21 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import type { Onramp } from '@stripe/stripe-react-native';
+import {
+  useEmbeddedEthereumWallet,
+  usePrivy,
+  useSigners,
+  type LinkedAccount,
+  type User as PrivyUser,
+} from '@privy-io/expo';
 import { RootStackParamList } from '../types';
-import { useOnramp } from '../hooks/useOnramp';
-import { prepareRemittanceWallet } from '../api/client';
-import { DEFAULT_DEMO_NETWORK_NAME } from '../constants';
+import { attachRemittanceWallet } from '../api/client';
+import {
+  DEFAULT_DEMO_NETWORK,
+  DEFAULT_DEMO_NETWORK_NAME,
+  PRIVY_WALLET_POLICY_IDS,
+  PRIVY_WALLET_SIGNER_ID,
+} from '../constants';
 import { useTransfer } from '../context/TransferContext';
 
 type Props = {
@@ -25,12 +35,49 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Wallet'>;
 };
 
-type SetupStage = 'idle' | 'creating_wallet' | 'registering_wallet' | 'ready';
+type SetupStage = 'idle' | 'creating_wallet' | 'authorizing_wallet' | 'attaching_wallet' | 'ready';
+
+type EthereumEmbeddedWalletAccount = LinkedAccount & {
+  type: 'wallet';
+  chain_type: 'ethereum';
+  connector_type: 'embedded';
+  id: string;
+  address: string;
+};
+
+function isEthereumEmbeddedWallet(account: LinkedAccount): account is EthereumEmbeddedWalletAccount {
+  return (
+    account.type === 'wallet' &&
+    account.chain_type === 'ethereum' &&
+    'connector_type' in account &&
+    account.connector_type === 'embedded' &&
+    'id' in account &&
+    typeof account.id === 'string' &&
+    Boolean(account.address)
+  );
+}
+
+function findEmbeddedWalletAccount(
+  user: PrivyUser | null | undefined,
+  address: string,
+): EthereumEmbeddedWalletAccount | undefined {
+  const normalizedAddress = address.toLowerCase();
+  return user?.linked_accounts
+    .filter(isEthereumEmbeddedWallet)
+    .find(account => account.address.toLowerCase() === normalizedAddress);
+}
+
+function isDuplicateSignerError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.toLowerCase().includes('duplicate signer');
+}
 
 export default function WalletScreen({ navigation, route }: Props) {
-  const { customerId, authToken } = route.params;
+  const { authToken } = route.params;
   const { transfer } = useTransfer();
-  const { registerWalletAddress } = useOnramp();
+  const { user: privyUser } = usePrivy();
+  const { wallets, create } = useEmbeddedEthereumWallet();
+  const { addSigners } = useSigners();
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<SetupStage>('idle');
   const routeNetworkName = DEFAULT_DEMO_NETWORK_NAME;
@@ -39,31 +86,75 @@ export default function WalletScreen({ navigation, route }: Props) {
     setBusy(true);
     setStage('creating_wallet');
     try {
-      const result = await prepareRemittanceWallet(authToken);
+      if (!privyUser) {
+        setStage('idle');
+        Alert.alert('Wallet setup failed', 'Sign in with Privy before authorizing the transfer.');
+        return;
+      }
+      if (!PRIVY_WALLET_SIGNER_ID) {
+        setStage('idle');
+        Alert.alert('Wallet setup failed', 'EXPO_PUBLIC_PRIVY_WALLET_SIGNER_ID is not set.');
+        return;
+      }
+
+      let walletAddress = wallets[0]?.address;
+      let userWithWallet = privyUser;
+      if (!walletAddress) {
+        const created = await create();
+        userWithWallet = created.user;
+        walletAddress = created.user.linked_accounts.filter(isEthereumEmbeddedWallet)[0]?.address;
+      }
+      if (!walletAddress) {
+        setStage('idle');
+        Alert.alert('Wallet setup failed', 'Privy did not return an embedded Ethereum wallet.');
+        return;
+      }
+
+      setStage('authorizing_wallet');
+      try {
+        await addSigners({
+          address: walletAddress,
+          signers: [{
+            signerId: PRIVY_WALLET_SIGNER_ID,
+            policyIds: PRIVY_WALLET_POLICY_IDS,
+          }],
+        });
+      } catch (err: unknown) {
+        if (!isDuplicateSignerError(err)) {
+          throw err;
+        }
+      }
+
+      const walletAccount = findEmbeddedWalletAccount(userWithWallet, walletAddress)
+        ?? findEmbeddedWalletAccount(privyUser, walletAddress);
+      if (!walletAccount?.id) {
+        setStage('idle');
+        Alert.alert('Wallet setup failed', 'Could not determine the Privy wallet ID.');
+        return;
+      }
+
+      setStage('attaching_wallet');
+      const result = await attachRemittanceWallet(authToken, {
+        walletAddress,
+        privyUserId: userWithWallet.id,
+        privyWalletId: walletAccount.id,
+        network: DEFAULT_DEMO_NETWORK,
+      });
       if (!result.success) {
         setStage('idle');
         Alert.alert('Wallet setup failed', result.error.message);
         return;
       }
 
-      setStage('registering_wallet');
-      const registration = await registerWalletAddress(
-        result.data.walletAddress,
-        result.data.network as Onramp.CryptoNetwork,
-      );
-      if (registration?.error) {
-        setStage('idle');
-        Alert.alert('Wallet registration failed', registration.error.message);
-        return;
-      }
-
       setStage('ready');
       navigation.replace('PaymentMethod', {
-        customerId,
         authToken,
         walletAddress: result.data.walletAddress,
         network: result.data.network,
       });
+    } catch (err: unknown) {
+      setStage('idle');
+      Alert.alert('Wallet setup failed', err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -92,12 +183,12 @@ export default function WalletScreen({ navigation, route }: Props) {
       <View style={styles.consentPanel}>
         <Text style={styles.consentTitle}>What you authorize</Text>
         <Text style={styles.consentText}>
-          The developer app may create or reuse a Privy wallet for you, receive USDC from Stripe
+          The developer app may create or reuse your Privy wallet, receive USDC from Stripe
           Onramp on {routeNetworkName}, and move those funds to complete this remittance.
         </Text>
         <Text style={styles.consentFinePrint}>
-          The wallet is created for you. The developer app handles the remittance flow and
-          uses delegated authority only for the payout handoff described here.
+          The wallet is yours. The developer app handles the remittance flow and uses delegated
+          authority only for the payout handoff described here.
         </Text>
       </View>
 
@@ -109,7 +200,13 @@ export default function WalletScreen({ navigation, route }: Props) {
         {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Authorize and continue</Text>}
       </TouchableOpacity>
 
-      {busy ? <Text style={styles.loadingText}>{stage === 'registering_wallet' ? 'Connecting Stripe delivery...' : 'Preparing transfer...'}</Text> : null}
+      {busy ? <Text style={styles.loadingText}>{
+        stage === 'authorizing_wallet'
+          ? 'Adding delegated payout authority...'
+          : stage === 'attaching_wallet'
+            ? 'Saving wallet for this transfer...'
+            : 'Preparing your wallet...'
+      }</Text> : null}
     </ScrollView>
   );
 }

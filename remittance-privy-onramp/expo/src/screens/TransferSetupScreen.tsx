@@ -1,18 +1,43 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RouteProp } from '@react-navigation/native';
+import { usePrivy } from '@privy-io/expo';
 import { RootStackParamList } from '../types';
 import { useTransfer } from '../context/TransferContext';
+import { errorMessage } from '../errors';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'TransferSetup'>;
-  route: RouteProp<RootStackParamList, 'TransferSetup'>;
 };
 
-export default function TransferSetupScreen({ navigation, route }: Props) {
-  const { customerId, authToken } = route.params;
+export default function TransferSetupScreen({ navigation }: Props) {
   const { transfer, updateTransfer } = useTransfer();
+  const { getAccessToken } = usePrivy();
+  const [loading, setLoading] = useState(false);
+
+  const continueToWallet = async () => {
+    if (!transfer.amountUsd || Number(transfer.amountUsd) <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount.');
+      return;
+    }
+    if (!transfer.recipientName.trim() || !transfer.recipientDestination.trim()) {
+      Alert.alert('Error', 'Please enter recipient details.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const authToken = await getAccessToken();
+      if (!authToken) {
+        throw new Error('Privy did not return an access token');
+      }
+      navigation.navigate('Wallet', { authToken });
+    } catch (err: unknown) {
+      Alert.alert('Error', errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -57,10 +82,11 @@ export default function TransferSetupScreen({ navigation, route }: Props) {
       </View>
 
       <TouchableOpacity
-        style={styles.button}
-        onPress={() => navigation.navigate('Wallet', { customerId, authToken })}
+        style={[styles.button, loading && styles.buttonDisabled]}
+        onPress={continueToWallet}
+        disabled={loading}
       >
-        <Text style={styles.buttonText}>Continue</Text>
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue</Text>}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -106,5 +132,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   button: { backgroundColor: '#635BFF', paddingVertical: 17, borderRadius: 12, alignItems: 'center' },
+  buttonDisabled: { opacity: 0.55 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 });
