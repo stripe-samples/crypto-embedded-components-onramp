@@ -8,8 +8,8 @@
  * ─── Recommended screen order and per-screen operations ─────────────────────
  *
  *  1. AuthScreen / RegisterScreen
- *       Operation : Link sign-in or account creation
- *       Produces  : customerId, authToken
+ *       Operation : Privy app sign-in, then Link sign-in or account creation
+ *       Produces  : customerId, authToken (Privy access token)
  *       Next      : KYCPrimerScreen
  *
  *  2. KYCPrimerScreen
@@ -30,8 +30,8 @@
  *       Next      : WalletScreen
  *
  *  5. WalletScreen
- *       Operation : Prepare or reuse the user's remittance wallet
- *       API calls : prepareRemittanceWallet()
+ *       Operation : Create/reuse the user's Privy wallet and add delegated signer
+ *       API calls : attachRemittanceWallet()
  *       Next      : PaymentMethodScreen (this screen)
  *
  *  6. PaymentMethodScreen  ◄── you are here
@@ -326,7 +326,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
       setLimitsError(null);
       try {
         if (settings.limitSource === 'api') {
-          // Fetch live limits from Stripe. The API uses the customer's auth token
+          // Fetch live limits from Stripe. The backend uses the Privy access token
           // to return limits for their current verified tier server-side.
           // Backend API: GET /v1/onramp/limits
           // Response: { limits: { "usd.fiat": { card: [{ limit, settlement_speed }] } } }

@@ -1,38 +1,26 @@
 import express, { Request, Response } from 'express';
 import {
-  PrivyClient,
   isEmbeddedWalletLinkedAccount,
   type LinkedAccount,
   type LinkedAccountEmbeddedWallet,
+  type PrivyClient,
   type PrivyWalletsService,
   type User,
 } from '@privy-io/node';
 import * as db from '../db/store';
 import { stripeCallWithRetry, toUserError } from '../utils/stripeApiHelper';
 import { errorMessage } from '../utils/errors';
+import { getPrivyClient } from '../utils/privy';
 
 const router = express.Router();
 
-const PRIVY_APP_ID = process.env.PRIVY_APP_ID;
-const PRIVY_APP_SECRET = process.env.PRIVY_APP_SECRET;
 const PRIVY_APP_AUTHORIZATION_PRIVATE_KEY = process.env.PRIVY_APP_AUTHORIZATION_PRIVATE_KEY;
 const USDC_CONTRACT_ADDRESS = process.env.USDC_CONTRACT_ADDRESS;
 const PRIVY_CAIP2 = process.env.PRIVY_CAIP2 ?? 'eip155:84532';
-const PRIVY_WALLET_SIGNER_ID = process.env.PRIVY_WALLET_SIGNER_ID;
-const PRIVY_WALLET_POLICY_IDS = process.env.PRIVY_WALLET_POLICY_IDS;
 const PRIVY_SPONSOR_GAS = process.env.PRIVY_SPONSOR_GAS !== 'false';
 const REMITTANCE_OFFRAMP_DESTINATION_ADDRESS = process.env.REMITTANCE_OFFRAMP_DESTINATION_ADDRESS;
 const REMITTANCE_ONRAMP_NETWORK = process.env.REMITTANCE_ONRAMP_NETWORK ?? 'tempo';
 const activeTransfers = new Set<string>();
-
-type EthereumWalletCreationInput = {
-  chain_type: 'ethereum';
-  policy_ids?: string[];
-  additional_signers?: Array<{
-    signer_id: string;
-    override_policy_ids?: string[];
-  }>;
-};
 
 type EthereumEmbeddedWalletWithId = Extract<LinkedAccountEmbeddedWallet, { chain_type: 'ethereum' }> & {
   id: string;
@@ -48,13 +36,6 @@ type StripeWebhookPayload = {
     };
   };
 };
-
-function getPrivyClient(): PrivyClient {
-  if (!PRIVY_APP_ID || !PRIVY_APP_SECRET) {
-    throw new Error('PRIVY_APP_ID and PRIVY_APP_SECRET must be set in server/.env');
-  }
-  return new PrivyClient({ appId: PRIVY_APP_ID, appSecret: PRIVY_APP_SECRET });
-}
 
 function assertEvmAddress(address: string, label: string) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
@@ -142,28 +123,6 @@ async function getAvailableUsdcUnits(privy: PrivyClient, walletId: string): Prom
   return BigInt(tokenBalance.raw_value);
 }
 
-function configuredPolicyIds(): string[] | undefined {
-  const policyIds = PRIVY_WALLET_POLICY_IDS?.split(',').map((id: string) => id.trim()).filter(Boolean);
-  return policyIds?.length ? policyIds : undefined;
-}
-
-function walletCreationInput(): EthereumWalletCreationInput {
-  const input: EthereumWalletCreationInput = {
-    chain_type: 'ethereum',
-  };
-  const policyIds = configuredPolicyIds();
-  if (policyIds) input.policy_ids = policyIds;
-  if (PRIVY_WALLET_SIGNER_ID) {
-    input.additional_signers = [
-      {
-        signer_id: PRIVY_WALLET_SIGNER_ID,
-        ...(policyIds ? { override_policy_ids: policyIds } : {}),
-      },
-    ];
-  }
-  return input;
-}
-
 function isEthereumEmbeddedWalletWithId(account: LinkedAccount): account is EthereumEmbeddedWalletWithId {
   return (
     isEmbeddedWalletLinkedAccount(account) &&
@@ -173,54 +132,11 @@ function isEthereumEmbeddedWalletWithId(account: LinkedAccount): account is Ethe
   );
 }
 
-function findEthereumEmbeddedWallet(user: User): EthereumEmbeddedWalletWithId | undefined {
-  return user.linked_accounts?.find(isEthereumEmbeddedWalletWithId);
-}
-
-async function createOrReusePrivyWallet(ownerEmail: string) {
-  if (!REMITTANCE_OFFRAMP_DESTINATION_ADDRESS) {
-    throw new Error('REMITTANCE_OFFRAMP_DESTINATION_ADDRESS must be set in server/.env');
-  }
-  assertEvmAddress(REMITTANCE_OFFRAMP_DESTINATION_ADDRESS, 'offramp destination address');
-
-  const existing = db.getRemittanceWalletForOwner(ownerEmail);
-  if (existing) return existing;
-
-  const privy = getPrivyClient();
-  let privyUser: User | null;
-  try {
-    privyUser = await privy.users().getByEmailAddress({ address: ownerEmail });
-  } catch {
-    privyUser = null;
-  }
-
-  if (!privyUser) {
-    privyUser = await privy.users().create({
-      linked_accounts: [{ type: 'email', address: ownerEmail }],
-      wallets: [walletCreationInput()],
-    });
-  }
-
-  let wallet = findEthereumEmbeddedWallet(privyUser);
-  if (!wallet) {
-    privyUser = await privy.users().pregenerateWallets(privyUser.id, {
-      wallets: [walletCreationInput()],
-    });
-    wallet = findEthereumEmbeddedWallet(privyUser);
-  }
-
-  if (!wallet?.address || !wallet?.id) {
-    throw new Error('Privy did not return an embedded Ethereum wallet for the user');
-  }
-
-  return db.upsertRemittanceWallet({
-    ownerEmail,
-    walletAddress: wallet.address,
-    network: REMITTANCE_ONRAMP_NETWORK,
-    privyUserId: privyUser.id,
-    privyWalletId: wallet.id,
-    offrampDestinationAddress: REMITTANCE_OFFRAMP_DESTINATION_ADDRESS,
-  });
+function findEthereumEmbeddedWalletByAddress(user: User, address: string): EthereumEmbeddedWalletWithId | undefined {
+  const normalizedAddress = address.toLowerCase();
+  return user.linked_accounts
+    ?.filter(isEthereumEmbeddedWalletWithId)
+    .find(account => account.address.toLowerCase() === normalizedAddress);
 }
 
 function remittanceWalletToApi(record: db.RemittanceWalletRecord) {
@@ -243,8 +159,8 @@ function toApi(record: db.RemittanceRecord) {
   };
 }
 
-function requireOwnedRemittance(req: Request, res: Response) {
-  const user = db.getUserFromRequest(req);
+async function requireOwnedRemittance(req: Request, res: Response) {
+  const user = await db.getUserFromRequest(req);
   if (!user) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
@@ -267,12 +183,57 @@ function requireOwnedRemittance(req: Request, res: Response) {
 
 router.post('/remittance_wallet', async (req: Request, res: Response) => {
   try {
-    const user = db.getUserFromRequest(req);
+    const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    console.log(`[remittance_wallet] preparing wallet for ${user.email}`);
-    const wallet = await createOrReusePrivyWallet(user.email);
-    console.log(`[remittance_wallet] ready for ${user.email}: ${wallet.walletAddress}`);
+    const {
+      wallet_address,
+      privy_user_id,
+      privy_wallet_id,
+      network,
+    } = req.body as {
+      wallet_address?: string;
+      privy_user_id?: string;
+      privy_wallet_id?: string;
+      network?: string;
+    };
+
+    if (!wallet_address || !privy_user_id || !privy_wallet_id) {
+      return res.status(400).json({
+        error: 'wallet_address, privy_user_id, and privy_wallet_id are required',
+      });
+    }
+    if (!REMITTANCE_OFFRAMP_DESTINATION_ADDRESS) {
+      throw new Error('REMITTANCE_OFFRAMP_DESTINATION_ADDRESS must be set in server/.env');
+    }
+    assertEvmAddress(wallet_address, 'wallet address');
+    assertEvmAddress(REMITTANCE_OFFRAMP_DESTINATION_ADDRESS, 'offramp destination address');
+    if (network && network !== REMITTANCE_ONRAMP_NETWORK) {
+      return res.status(400).json({
+        error: `Wallet network must match configured remittance network ${REMITTANCE_ONRAMP_NETWORK}`,
+      });
+    }
+    if (user.privyUserId && user.privyUserId !== privy_user_id) {
+      return res.status(403).json({ error: 'Privy wallet does not belong to the authenticated user' });
+    }
+
+    const privy = getPrivyClient();
+    const privyUser = await privy.users()._get(privy_user_id);
+    const linkedWallet = findEthereumEmbeddedWalletByAddress(privyUser, wallet_address);
+    if (!linkedWallet || linkedWallet.id !== privy_wallet_id) {
+      return res.status(400).json({ error: 'Privy wallet is not linked to the authenticated user' });
+    }
+
+    const wallet = db.upsertRemittanceWallet({
+      ownerEmail: user.email,
+      walletAddress: linkedWallet.address,
+      network: REMITTANCE_ONRAMP_NETWORK,
+      privyUserId: privy_user_id,
+      privyWalletId: privy_wallet_id,
+      offrampDestinationAddress: REMITTANCE_OFFRAMP_DESTINATION_ADDRESS,
+    });
+
+    console.log(`[remittance_wallet] attached for ${user.email}: ${wallet.walletAddress}`);
     res.json(remittanceWalletToApi(wallet));
   } catch (err: unknown) {
     const message = errorMessage(err);
@@ -283,7 +244,7 @@ router.post('/remittance_wallet', async (req: Request, res: Response) => {
 
 router.post('/remittances', async (req: Request, res: Response) => {
   try {
-    const user = db.getUserFromRequest(req);
+    const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const record = db.getRecord(user.email);
@@ -354,7 +315,7 @@ router.post('/remittances', async (req: Request, res: Response) => {
 
 router.post('/remittances/:remittanceId/quote', async (req: Request, res: Response) => {
   try {
-    const result = requireOwnedRemittance(req, res);
+    const result = await requireOwnedRemittance(req, res);
     if (!result) return;
 
     const { response, data } = await stripeCallWithRetry(
@@ -376,7 +337,7 @@ router.post('/remittances/:remittanceId/quote', async (req: Request, res: Respon
 
 router.post('/remittances/:remittanceId/checkout', async (req: Request, res: Response) => {
   try {
-    const result = requireOwnedRemittance(req, res);
+    const result = await requireOwnedRemittance(req, res);
     if (!result) return;
     const { user, record } = result;
 
@@ -427,32 +388,36 @@ router.post('/remittances/:remittanceId/checkout', async (req: Request, res: Res
 });
 
 router.get('/remittances/:remittanceId', async (req: Request, res: Response) => {
-  const result = requireOwnedRemittance(req, res);
-  if (!result) return;
-  let { record } = result;
+  try {
+    const result = await requireOwnedRemittance(req, res);
+    if (!result) return;
+    let { record } = result;
 
-  if (req.query.sync === 'stripe') {
-    const userRecord = db.getRecord(result.user.email);
-    if (userRecord) {
-      const stripeResult = await stripeCallWithRetry(
-        `/crypto/onramp_sessions/${record.onrampSessionId}`,
-        new URLSearchParams(),
-        userRecord,
-        'GET',
-      );
-      const status = stripeResult.data?.status;
-      const fulfilledStatuses = ['fulfilled', 'fulfillment_completed', 'fulfillment_complete', 'succeeded', 'complete'];
-      if (stripeResult.response.ok && status && fulfilledStatuses.includes(status)) {
-        record = db.updateRemittance(record.id, {
-          status: 'onramp_fulfilled',
-          error: undefined,
-        })!;
+    if (req.query.sync === 'stripe') {
+      const userRecord = db.getRecord(result.user.email);
+      if (userRecord) {
+        const stripeResult = await stripeCallWithRetry(
+          `/crypto/onramp_sessions/${record.onrampSessionId}`,
+          new URLSearchParams(),
+          userRecord,
+          'GET',
+        );
+        const status = stripeResult.data?.status;
+        const fulfilledStatuses = ['fulfilled', 'fulfillment_completed', 'fulfillment_complete', 'succeeded', 'complete'];
+        if (stripeResult.response.ok && status && fulfilledStatuses.includes(status)) {
+          record = db.updateRemittance(record.id, {
+            status: 'onramp_fulfilled',
+            error: undefined,
+          })!;
+        }
+        return res.json({ ...toApi(record), stripeStatus: status });
       }
-      return res.json({ ...toApi(record), stripeStatus: status });
     }
-  }
 
-  res.json(toApi(record));
+    res.json(toApi(record));
+  } catch (err: unknown) {
+    res.status(500).json({ error: errorMessage(err) });
+  }
 });
 
 router.post('/webhooks/stripe', (req: Request, res: Response) => {
@@ -484,7 +449,7 @@ router.post('/remittances/:remittanceId/transfer', async (req: Request, res: Res
   }
   activeTransfers.add(remittanceId);
   try {
-    const result = requireOwnedRemittance(req, res);
+    const result = await requireOwnedRemittance(req, res);
     if (!result) return;
     const { record } = result;
 

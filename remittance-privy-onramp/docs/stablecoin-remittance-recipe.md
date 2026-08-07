@@ -25,15 +25,16 @@ This recipe is a good fit for developers that:
 Alice is in the US and wants to send value to Bob in Mexico through a developer app.
 
 1. Alice starts a remittance to Bob.
-2. The developer creates or retrieves Alice's sender-owned, non-custodial Privy wallet.
-3. Alice pays fiat through Stripe Onramp.
-4. Stripe handles Alice's Link authentication, sender checks for the Onramp transaction, payment, risk checks, checkout, and settlement.
-5. Stripe converts the Onramp amount into USDC.
-6. Stripe delivers USDC to Alice's wallet address.
-7. Stripe emits the normal Onramp fulfillment webhook.
-8. The funds are now held in Alice's Privy wallet.
-9. The developer either holds funds in Alice's wallet or uses approved delegated authority to move USDC to the next destination.
-10. The developer or its payout provider completes the downstream path, such as delivery to Bob's wallet, USDC-to-local-currency conversion, or local-bank payout.
+2. Alice signs in with Privy, and the developer app creates or retrieves Alice's sender-owned, non-custodial Privy wallet on device.
+3. Alice authorizes the developer app's backend signer under a remittance policy.
+4. Alice pays fiat through Stripe Onramp.
+5. Stripe handles Alice's Link authentication, sender checks for the Onramp transaction, payment, risk checks, checkout, and settlement.
+6. Stripe converts the Onramp amount into USDC.
+7. Stripe delivers USDC to Alice's wallet address.
+8. Stripe emits the normal Onramp fulfillment webhook.
+9. The funds are now held in Alice's Privy wallet.
+10. The developer either holds funds in Alice's wallet or uses approved delegated authority to move USDC to the next destination.
+11. The developer or its payout provider completes the downstream path, such as delivery to Bob's wallet, USDC-to-local-currency conversion, or local-bank payout.
 
 ## Sequence
 
@@ -48,9 +49,11 @@ sequenceDiagram
   participant Downstream as Bob's wallet or payout provider
 
   Alice->>App: Start remittance
-  App->>Privy: Create or retrieve Alice's non-custodial wallet
+  Alice->>Privy: Sign in
+  App->>Privy: Create or retrieve Alice's non-custodial wallet on device
   Privy-->>App: wallet address
-  App->>Privy: Configure delegated authority, if used
+  Alice->>App: Consent to remittance wallet authority
+  App->>Privy: Add backend signer under remittance policy
   Privy-->>App: Delegation configured
 
   App->>Stripe: Register wallet address
@@ -83,7 +86,7 @@ Stripe Onramp handles:
 The developer controls:
 
 - App user authentication.
-- Privy user and wallet creation.
+- Privy user authentication and client-side wallet creation.
 - User consent for wallet creation and delegated wallet actions.
 - Wallet-to-user mapping.
 - Delegated signer and policy configuration.
@@ -94,7 +97,9 @@ The developer controls:
 
 ## Wallet And Delegation Model
 
-The Onramp destination should be the sender's wallet. In this sample, the backend creates or reuses a non-custodial Privy EVM wallet for the authenticated app user and keeps Privy identifiers server-side. The backend orchestrates wallet setup, but the wallet is created for the sender.
+The Onramp destination should be the sender's wallet. In this sample, Alice signs in with Privy and the mobile app creates or reuses her non-custodial Privy EVM wallet on device. The app then asks Alice to authorize the backend signer under a remittance policy.
+
+The backend verifies Alice's Privy access token, checks that the attached wallet belongs to Alice's Privy user, stores the wallet mapping, and later uses its delegated signer for the post-delivery payout handoff.
 
 If the developer uses delegated authority to automate post-delivery transfers, that authority should be narrowly scoped:
 
@@ -109,7 +114,7 @@ This sample uses a preconfigured policy so the integration is easy to run. A pro
 
 The app should explain the wallet-backed flow before wallet creation or delegated transfer authority is configured. The user should understand that:
 
-- A non-custodial wallet is created or reused for them.
+- A non-custodial wallet is created or reused for them on device.
 - Stripe powers the payment and USDC delivery to that wallet.
 - The developer app may use delegated authority to move USDC from that wallet only for the disclosed remittance flow.
 - The developer app controls the downstream experience after USDC reaches the wallet.
@@ -141,8 +146,9 @@ The downstream destination can vary by product. A developer can send USDC to a r
 A production implementation should:
 
 - Use durable storage and idempotent backend state transitions.
+- Verify Privy access tokens and wallet ownership before storing wallet mappings.
 - Verify Stripe webhook signatures.
-- Keep Privy identifiers, authorization keys, signer IDs, and policy IDs server-side.
+- Keep Privy authorization keys server-side.
 - Store user consent records.
 - Track Onramp status separately from downstream payout status.
 - Avoid relying on the foreground mobile app to advance funds.

@@ -18,13 +18,8 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_API_URL;
 // Response Types
 // ============================================================================
 
-export interface AuthResponse {
-  token: string;
-}
-
 export interface AuthIntentResponse {
   authIntentId: string;
-  token?: string;
 }
 
 export interface SaveUserResponse {
@@ -184,7 +179,6 @@ export type ApiResult<T> =
 
 type AuthIntentApiResponse = {
   authIntentId: string;
-  token?: string;
 };
 
 // ============================================================================
@@ -245,27 +239,13 @@ async function get<T>(
 // Auth API
 // ============================================================================
 
-export async function signup(
-  email: string,
-  password: string,
-): Promise<ApiResult<AuthResponse>> {
-  return post('/v1/auth/signup', { email, password });
-}
-
-export async function login(
-  email: string,
-  password: string,
-): Promise<ApiResult<AuthResponse>> {
-  return post('/v1/auth/login', { email, password });
-}
-
 export async function createAuthIntent(
   authToken: string,
   oauthScopes = 'kyc.status:read,crypto:ramp',
 ): Promise<ApiResult<AuthIntentResponse>> {
   const res = await post<AuthIntentApiResponse>('/v1/auth/create', { oauth_scopes: oauthScopes }, authToken);
   if (!res.success) return res;
-  return { success: true, data: { authIntentId: res.data.authIntentId, token: res.data.token } };
+  return { success: true, data: { authIntentId: res.data.authIntentId } };
 }
 
 export async function saveUser(
@@ -368,10 +348,21 @@ export async function getRemittance(
   return get(`/v1/remittances/${remittanceId}`, authToken, new URLSearchParams({ sync: 'stripe' }));
 }
 
-export async function prepareRemittanceWallet(
+export async function attachRemittanceWallet(
   authToken: string,
+  params: {
+    walletAddress: string;
+    privyUserId: string;
+    privyWalletId: string;
+    network: string;
+  },
 ): Promise<ApiResult<RemittanceWalletResponse>> {
-  return post('/v1/remittance_wallet', {}, authToken);
+  return post('/v1/remittance_wallet', {
+    wallet_address: params.walletAddress,
+    privy_user_id: params.privyUserId,
+    privy_wallet_id: params.privyWalletId,
+    network: params.network,
+  }, authToken);
 }
 
 export async function triggerRemittanceTransfer(params: {

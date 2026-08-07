@@ -41,7 +41,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
         Alert.alert('Error', intentResult.error.message);
         return;
       }
-      let authToken = intentResult.data.token ?? initialToken;
+      const authToken = initialToken;
 
       const authResult = await authorize(intentResult.data.authIntentId);
       if (authResult.error) {

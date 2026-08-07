@@ -22,6 +22,11 @@ export const NETWORK_NAMES: Record<string, string> = {
 
 export const DEFAULT_DEMO_NETWORK = process.env.EXPO_PUBLIC_ONRAMP_NETWORK ?? 'tempo';
 export const DEFAULT_DEMO_NETWORK_NAME = NETWORK_NAMES[DEFAULT_DEMO_NETWORK] ?? DEFAULT_DEMO_NETWORK;
+export const PRIVY_WALLET_SIGNER_ID = process.env.EXPO_PUBLIC_PRIVY_WALLET_SIGNER_ID;
+export const PRIVY_WALLET_POLICY_IDS = (process.env.EXPO_PUBLIC_PRIVY_WALLET_POLICY_IDS ?? '')
+  .split(',')
+  .map((policyId: string) => policyId.trim())
+  .filter(Boolean);
 
 export const CURRENCIES_BY_NETWORK: Record<string, string[]> = {
   ethereum: ['eth', 'usdc'],
@@ -29,4 +34,5 @@ export const CURRENCIES_BY_NETWORK: Record<string, string[]> = {
   solana: ['sol'],
   base: ['usdc', 'eth'],
   tempo: ['usdc'],
+  tempo_testnet: ['usdc'],
 };

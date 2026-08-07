@@ -1,8 +1,10 @@
 import crypto from 'crypto';
 import { Request } from 'express';
+import { type LinkedAccount, type User } from '@privy-io/node';
+import { getPrivyClient } from '../utils/privy';
 
 export interface UserRecord {
-  password: string;
+  privyUserId?: string;
   cryptoCustomerId: string | null;
   linkAuthIntentId: string | null;
   accessToken: string | null;
@@ -11,7 +13,6 @@ export interface UserRecord {
 
 export interface UserWithMeta extends UserRecord {
   email: string;
-  token: string;
 }
 
 export interface RemittanceRecord {
@@ -45,7 +46,6 @@ export interface RemittanceWalletRecord {
 }
 
 const users = new Map<string, UserRecord>();
-const tokens = new Map<string, string>();
 const remittances = new Map<string, RemittanceRecord>();
 const remittancesByOnrampSession = new Map<string, string>();
 const remittanceWallets = new Map<string, RemittanceWalletRecord>();
@@ -55,44 +55,45 @@ function normalizeAddress(address: string): string {
   return address.toLowerCase();
 }
 
-function generateToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+function isEmailAccount(account: LinkedAccount): account is Extract<LinkedAccount, { type: 'email' }> {
+  return account.type === 'email';
 }
 
-export function createUser(email: string, password: string): string | null {
-  if (users.has(email)) return null;
-  users.set(email, {
-    password,
-    cryptoCustomerId: null,
-    linkAuthIntentId: null,
-    accessToken: null,
-    refreshToken: null,
-  });
-  const token = generateToken();
-  tokens.set(token, email);
-  return token;
+function getPrimaryEmail(user: User): string | null {
+  const email = user.linked_accounts.find(isEmailAccount)?.address;
+  return email ? email.toLowerCase() : null;
 }
 
-export function authenticateUser(email: string, password: string): string | null {
-  const user = users.get(email);
-  if (!user || user.password !== password) return null;
-  const token = generateToken();
-  tokens.set(token, email);
-  return token;
-}
-
-function getUserByToken(token: string): UserWithMeta | null {
-  const email = tokens.get(token);
-  if (!email) return null;
+export function createOrUpdatePrivyUser(email: string, privyUserId: string): UserWithMeta {
+  const existing = users.get(email);
+  if (existing) {
+    existing.privyUserId = privyUserId;
+  } else {
+    users.set(email, {
+      privyUserId,
+      cryptoCustomerId: null,
+      linkAuthIntentId: null,
+      accessToken: null,
+      refreshToken: null,
+    });
+  }
   const record = users.get(email);
-  if (!record) return null;
-  return { email, token, ...record };
+  if (!record) throw new Error('Unable to create user record');
+  return { email, ...record };
 }
 
-export function getUserFromRequest(req: Request): UserWithMeta | null {
+export async function getUserFromRequest(req: Request): Promise<UserWithMeta | null> {
   const auth = req.headers['authorization'];
   if (!auth?.startsWith('Bearer ')) return null;
-  return getUserByToken(auth.slice(7));
+
+  const privy = getPrivyClient();
+  const verified = await privy.utils().auth().verifyAccessToken(auth.slice(7));
+  const privyUser = await privy.users()._get(verified.user_id);
+  const email = getPrimaryEmail(privyUser);
+  if (!email) {
+    throw new Error('Privy user must have a linked email account');
+  }
+  return createOrUpdatePrivyUser(email, verified.user_id);
 }
 
 export function getRecord(email: string): UserRecord | undefined {
