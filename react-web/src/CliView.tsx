@@ -33,10 +33,7 @@ export type CliViewProps = {
     country: string,
   ) => Promise<void>;
   onSubmitKycInfo: (info: KycInfo) => Promise<void>;
-  onRegisterWallet: (
-    address: string,
-    network: CryptoNetwork,
-  ) => Promise<void>;
+  onRegisterWallet: (address: string, network: CryptoNetwork) => Promise<import("@stripe/crypto").CryptoConsumerWallet>;
   onDeleteWallet: (token: string) => Promise<void>;
   onCollectPaymentMethod: (
     types: string[],

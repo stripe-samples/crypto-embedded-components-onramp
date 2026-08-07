@@ -434,7 +434,7 @@ const ExampleAppInner: React.FC<{
   const handleCollectPaymentMethod = useCallback(
     async (
       paymentMethodTypes: string[],
-      wallets: { applePay: "auto" | "never"; googlePay: "auto" | "never" },
+      wallets: { applePay: "auto" | "always" | "never"; googlePay: "auto" | "always" | "never" },
     ): Promise<HTMLElement> => {
       const options: CollectPaymentMethodOptions = {
         payment_method_types: paymentMethodTypes,
