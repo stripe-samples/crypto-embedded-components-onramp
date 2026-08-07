@@ -62,7 +62,7 @@ export type WizardViewProps = {
   onDeleteWallet: (token: string) => Promise<void>;
   onCollectPaymentMethod: (
     types: string[],
-    wallets: { applePay: "auto" | "never"; googlePay: "auto" | "never" },
+    wallets: { applePay: "auto" | "never" | "always" ; googlePay: "auto" | "never" | "always"},
   ) => Promise<HTMLElement>;
   onVerifyDocuments: () => Promise<void>;
   onAddFunds: (
@@ -1403,8 +1403,8 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                     paymentRef.current.innerHTML = "";
                     setCollectedPaymentTypes(types);
                     const el = await props.onCollectPaymentMethod(types, {
-                      applePay: "auto",
-                      googlePay: "auto",
+                      applePay: "always",
+                      googlePay: "always",
                     });
                     paymentRef.current.appendChild(el);
                     setPayMounted(true);
