@@ -25,16 +25,18 @@ This recipe is a good fit for developers that:
 Alice is in the US and wants to send value to Bob in Mexico through a developer app.
 
 1. Alice starts a remittance to Bob.
-2. Alice signs in with Privy, and the developer app creates or retrieves Alice's sender-owned, non-custodial Privy wallet on device.
-3. Alice authorizes the developer app's backend signer under a remittance policy.
-4. Alice pays fiat through Stripe Onramp.
-5. Stripe handles Alice's Link authentication, sender checks for the Onramp transaction, payment, risk checks, checkout, and settlement.
-6. Stripe converts the Onramp amount into USDC.
-7. Stripe delivers USDC to Alice's wallet address.
-8. Stripe emits the normal Onramp fulfillment webhook.
-9. The funds are now held in Alice's Privy wallet.
-10. The developer either holds funds in Alice's wallet or uses approved delegated authority to move USDC to the next destination.
-11. The developer or its payout provider completes the downstream path, such as delivery to Bob's wallet, USDC-to-local-currency conversion, or local-bank payout.
+2. Alice signs in with Privy.
+3. Alice enters transfer details.
+4. The developer app creates or retrieves Alice's sender-owned, non-custodial Privy wallet on device.
+5. Alice authorizes the developer app's backend signer under a remittance policy.
+6. Alice continues with Link when she is ready to pay.
+7. Stripe handles Alice's Link authentication, sender checks for the Onramp transaction, payment, risk checks, checkout, and settlement.
+8. Stripe converts the Onramp amount into USDC.
+9. Stripe delivers USDC to Alice's wallet address.
+10. Stripe emits the normal Onramp fulfillment webhook.
+11. The funds are now held in Alice's Privy wallet.
+12. The developer either holds funds in Alice's wallet or uses approved delegated authority to move USDC to the next destination.
+13. The developer or its payout provider completes the downstream path, such as delivery to Bob's wallet, USDC-to-local-currency conversion, or local-bank payout.
 
 ## Sequence
 
@@ -50,16 +52,18 @@ sequenceDiagram
 
   Alice->>App: Start remittance
   Alice->>Privy: Sign in
+  Alice->>App: Enter transfer details
   App->>Privy: Create or retrieve Alice's non-custodial wallet on device
   Privy-->>App: wallet address
   Alice->>App: Consent to remittance wallet authority
   App->>Privy: Add backend signer under remittance policy
   Privy-->>App: Delegation configured
 
+  Alice->>Stripe: Continue with Link for Onramp
   App->>Stripe: Register wallet address
   App->>Stripe: Create Onramp session with wallet address
   Stripe-->>App: Onramp session
-  Alice->>Stripe: Complete Link auth, Onramp checks, payment, and checkout
+  Alice->>Stripe: Complete Onramp checks, payment, and checkout
   Stripe->>Chain: Deliver USDC to Alice's wallet
   Chain-->>Stripe: Onchain confirmation
   Stripe-->>App: fulfillment_completed webhook

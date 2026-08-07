@@ -5,7 +5,6 @@ This sample shows how to build a remittance app where Stripe Onramp delivers USD
 The sample includes:
 
 - An Expo React Native app using `@stripe/stripe-react-native` Embedded Components Onramp.
-- A Vite React web app using `@stripe/crypto` Embedded Components Onramp.
 - A Node.js backend for Privy session verification, Link auth, Onramp session creation, wallet attachment, fulfillment tracking, and delegated payout handoff.
 - Public docs for the recipe and the implementation sequence.
 
@@ -24,7 +23,6 @@ Because funds land in a user-owned wallet, the same pattern can support immediat
 remittance-privy-onramp/
   backend/  Shared Node.js API used by client apps
   expo/     Expo React Native app
-  web/      Vite React web app
   docs/     Recipe and integration guide
 ```
 
@@ -74,20 +72,6 @@ EXPO_PUBLIC_PRIVY_WALLET_POLICY_IDS=YOUR_OPTIONAL_POLICY_ID
 ```
 
 When running on a physical device, set `EXPO_PUBLIC_API_URL` to your computer's local network IP address instead of `localhost`.
-
-## Configure The Web App
-
-```bash
-cp web/.env.example web/.env
-```
-
-Set:
-
-```bash
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY
-VITE_API_URL=http://localhost:3001
-VITE_ONRAMP_NETWORK=tempo
-```
 
 ## Configure The Backend
 
@@ -139,14 +123,6 @@ npm run expo:ios
 npm run expo:android
 ```
 
-Or start the web app:
-
-```bash
-npm run web
-```
-
-Open the local Vite URL shown in the terminal, usually `http://localhost:5173`.
-
 ## App Flow
 
 The sample supports two post-delivery modes:
@@ -157,12 +133,14 @@ The sample supports two post-delivery modes:
 The user-facing flow is:
 
 1. Select payout mode.
-2. Sign in with Privy and authorize with Link.
+2. Sign in with Privy.
 3. Enter transfer amount and recipient.
 4. Consent to wallet creation/reuse and delegated payout authority.
-5. Select a payment method.
-6. Review and complete Onramp checkout.
-7. Track payment, USDC delivery, wallet hold, and payout handoff.
+5. Continue with Link from the payment method screen.
+6. Complete identity collection only if Stripe Onramp requires it.
+7. Select a payment method.
+8. Review and complete Onramp checkout.
+9. Track payment, USDC delivery, wallet hold, and payout handoff.
 
 ## Production Notes
 

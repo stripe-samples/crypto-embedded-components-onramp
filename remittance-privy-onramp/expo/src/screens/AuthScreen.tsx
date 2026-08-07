@@ -4,12 +4,8 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { useLoginWithEmail, usePrivy, type User as PrivyUser } from '@privy-io/expo';
-import { useOnramp } from '../hooks/useOnramp';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
-import { createAuthIntent, saveUser, getOnrampCustomer } from '../api/client';
-import { MERCHANT_DISPLAY_NAME } from '../constants';
-import { useSettings } from '../context/SettingsContext';
 import { errorMessage } from '../errors';
 
 type Props = {
@@ -22,13 +18,8 @@ export default function AuthScreen({ navigation }: Props) {
   const [codeSent, setCodeSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { configure, hasLinkAccount, authorize } = useOnramp();
   const { user: privyUser, isReady: privyReady, getAccessToken, logout } = usePrivy();
   const { sendCode, loginWithCode } = useLoginWithEmail();
-
-  // Read the KYC tier chosen in the Settings screen so we can route the user
-  // through the appropriate identity-collection steps (or skip them for L0).
-  const { settings } = useSettings();
 
   const getPrivyEmail = (user: PrivyUser | null | undefined) => {
     const account = user?.linked_accounts.find(linkedAccount => linkedAccount.type === 'email');
@@ -36,80 +27,14 @@ export default function AuthScreen({ navigation }: Props) {
   };
 
   const continueWithPrivy = async () => {
-    const appEmail = getPrivyEmail(privyUser) ?? email.trim().toLowerCase();
-    if (!appEmail) {
+    if (!getPrivyEmail(privyUser) && !email.trim()) {
       throw new Error('Privy user must have a linked email account');
     }
     const privyAccessToken = await getAccessToken();
     if (!privyAccessToken) {
       throw new Error('Privy did not return an access token');
     }
-    const authToken = privyAccessToken;
-
-    // Step 1: Configure the onramp SDK
-    const configResult = await configure({
-      merchantDisplayName: MERCHANT_DISPLAY_NAME,
-      appearance: { style: 'AUTOMATIC' },
-    });
-    if (configResult.error) {
-      throw new Error(configResult.error.message);
-    }
-
-    // Step 2: Check for existing Link account
-    const linkResult = await hasLinkAccount(appEmail);
-    if (linkResult.error) {
-      throw new Error(linkResult.error.message);
-    }
-
-    if (!linkResult.hasLinkAccount) {
-      // Register new Link user — phone collected in next screen
-      navigation.navigate('Register', { email: appEmail, authToken });
-      return;
-    }
-
-    // Step 3: Create auth intent via backend
-    const intentResult = await createAuthIntent(authToken);
-    if (!intentResult.success) {
-      throw new Error(intentResult.error.message);
-    }
-    // Step 4: Authorize (presents Link consent/OTP screen)
-    const authResult = await authorize(intentResult.data.authIntentId);
-    if (authResult.error) {
-      throw new Error(authResult.error.message);
-    }
-    if (authResult.status === 'Denied') {
-      Alert.alert('Denied', 'You must consent to continue.');
-      return;
-    }
-    if (authResult.status !== 'Consented' || !authResult.customerId) {
-      Alert.alert('Canceled', 'Authorization was canceled.');
-      return;
-    }
-
-    const saveRes = await saveUser(authResult.customerId, authToken);
-    if (!saveRes.success) {
-      throw new Error(saveRes.error.message);
-    }
-
-    const customerRes = await getOnrampCustomer(authResult.customerId, authToken);
-    if (!customerRes.success) {
-      throw new Error(customerRes.error.message);
-    }
-    const l1Status = customerRes.data.kycTiers.find(tier => tier.tier === 'l1')?.verification_status;
-    const l2Status = customerRes.data.kycTiers.find(tier => tier.tier === 'l2')?.verification_status;
-    const hasVerifiedIdentityTier = l1Status === 'verified' || l2Status === 'verified';
-
-    if (hasVerifiedIdentityTier || settings.kycTier === 'L0') {
-      navigation.navigate('TransferSetup', {
-        customerId: authResult.customerId,
-        authToken,
-      });
-    } else {
-      navigation.navigate('KYCPrimer', {
-        customerId: authResult.customerId,
-        authToken,
-      });
-    }
+    navigation.navigate('TransferSetup');
   };
 
   const sendLoginCode = async () => {

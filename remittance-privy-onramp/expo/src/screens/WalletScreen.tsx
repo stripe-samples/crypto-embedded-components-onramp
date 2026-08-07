@@ -2,8 +2,9 @@
  * WalletScreen - the user authorizes wallet setup for this remittance.
  *
  * The app creates or reuses the user's Privy embedded wallet on device, adds
- * the backend signer/policy the user consents to, attaches that wallet to the
- * backend, and registers the address with Stripe Onramp.
+ * the backend signer/policy the user consents to, and attaches that wallet to
+ * the backend. Stripe Onramp wallet registration happens later, after Link
+ * authorizes the payment customer.
  */
 import React, { useState } from 'react';
 import {
@@ -12,7 +13,6 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import type { Onramp } from '@stripe/stripe-react-native';
 import {
   useEmbeddedEthereumWallet,
   usePrivy,
@@ -21,7 +21,6 @@ import {
   type User as PrivyUser,
 } from '@privy-io/expo';
 import { RootStackParamList } from '../types';
-import { useOnramp } from '../hooks/useOnramp';
 import { attachRemittanceWallet } from '../api/client';
 import {
   DEFAULT_DEMO_NETWORK,
@@ -36,7 +35,7 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Wallet'>;
 };
 
-type SetupStage = 'idle' | 'creating_wallet' | 'authorizing_wallet' | 'attaching_wallet' | 'registering_wallet' | 'ready';
+type SetupStage = 'idle' | 'creating_wallet' | 'authorizing_wallet' | 'attaching_wallet' | 'ready';
 
 type EthereumEmbeddedWalletAccount = LinkedAccount & {
   type: 'wallet';
@@ -74,9 +73,8 @@ function isDuplicateSignerError(err: unknown): boolean {
 }
 
 export default function WalletScreen({ navigation, route }: Props) {
-  const { customerId, authToken } = route.params;
+  const { authToken } = route.params;
   const { transfer } = useTransfer();
-  const { registerWalletAddress } = useOnramp();
   const { user: privyUser } = usePrivy();
   const { wallets, create } = useEmbeddedEthereumWallet();
   const { addSigners } = useSigners();
@@ -148,20 +146,8 @@ export default function WalletScreen({ navigation, route }: Props) {
         return;
       }
 
-      setStage('registering_wallet');
-      const registration = await registerWalletAddress(
-        result.data.walletAddress,
-        result.data.network as Onramp.CryptoNetwork,
-      );
-      if (registration?.error) {
-        setStage('idle');
-        Alert.alert('Wallet registration failed', registration.error.message);
-        return;
-      }
-
       setStage('ready');
       navigation.replace('PaymentMethod', {
-        customerId,
         authToken,
         walletAddress: result.data.walletAddress,
         network: result.data.network,
@@ -219,9 +205,7 @@ export default function WalletScreen({ navigation, route }: Props) {
           ? 'Adding delegated payout authority...'
           : stage === 'attaching_wallet'
             ? 'Saving wallet for this transfer...'
-            : stage === 'registering_wallet'
-              ? 'Connecting Stripe delivery...'
-              : 'Preparing your wallet...'
+            : 'Preparing your wallet...'
       }</Text> : null}
     </ScrollView>
   );

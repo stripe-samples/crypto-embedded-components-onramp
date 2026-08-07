@@ -11,7 +11,7 @@
  * attachKycInfo() merges with any data already on file — only send the fields
  * collected in this onboarding flow (do not re-send fields from prior sessions).
  *
- * Next screen: WalletScreen
+ * Next screen: PaymentMethodScreen
  */
 import React, { useState } from 'react';
 import {
@@ -48,7 +48,18 @@ type Props = {
 };
 
 export default function AddressScreen({ navigation, route }: Props) {
-  const { customerId, authToken, firstName, lastName, idNumber, dobDay, dobMonth, dobYear } = route.params;
+  const {
+    customerId,
+    authToken,
+    walletAddress,
+    network,
+    firstName,
+    lastName,
+    idNumber,
+    dobDay,
+    dobMonth,
+    dobYear,
+  } = route.params;
   const [submitting, setSubmitting] = useState(false);
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [form, setForm] = useState({
@@ -105,10 +116,16 @@ export default function AddressScreen({ navigation, route }: Props) {
         }
       }
 
-      // Proceed to wallet attachment. PaymentMethodScreen (reached after the
-      // wallet is registered) will poll getOnrampCustomer() to confirm the
-      // initial KYC submission is verified before allowing a transfer.
-      navigation.navigate('TransferSetup', { customerId, authToken });
+      // Return to payment. PaymentMethodScreen will poll getOnrampCustomer()
+      // to confirm the initial KYC submission is verified before allowing a
+      // transfer.
+      navigation.navigate('PaymentMethod', {
+        customerId,
+        authToken,
+        walletAddress,
+        network,
+        kycSubmitted: true,
+      });
     } catch (err: unknown) {
       Alert.alert('Error', errorMessage(err));
     } finally {

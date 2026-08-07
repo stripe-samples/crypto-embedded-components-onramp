@@ -44,7 +44,7 @@ const REQUIREMENTS_BY_TIER = {
 };
 
 export default function KYCPrimerScreen({ navigation, route }: Props) {
-  const { customerId, authToken } = route.params;
+  const { customerId, authToken, walletAddress, network } = route.params;
   const { settings } = useSettings();
 
   const requirements = REQUIREMENTS_BY_TIER[settings.kycTier];
@@ -97,7 +97,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
 
       <TouchableOpacity
         style={styles.button}
-        onPress={() => navigation.navigate('KYC', { customerId, authToken })}
+        onPress={() => navigation.navigate('KYC', { customerId, authToken, walletAddress, network })}
       >
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>

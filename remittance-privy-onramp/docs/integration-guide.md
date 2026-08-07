@@ -22,11 +22,12 @@ The Stripe docs cover the normal Onramp flow: Link auth, wallet registration, qu
 This guide assumes you are building a flow like:
 
 1. Alice wants to send value to Bob.
-2. Alice signs in to the developer app with Privy and authorizes with Link for Stripe Onramp.
-3. The developer app creates or reuses Alice's Privy wallet on device.
-4. Alice consents to adding the app backend signer under a remittance policy.
-5. Stripe Onramp delivers USDC to Alice's wallet.
-6. The developer app either holds USDC in Alice's wallet or moves it onward through a payout/offramp route.
+2. Alice signs in to the developer app with Privy.
+3. Alice enters transfer details.
+4. Alice consents to creating or reusing her Privy wallet and adding the app backend signer under a remittance policy.
+5. Alice continues with Link when she is ready to pay.
+6. Stripe Onramp delivers USDC to Alice's wallet.
+7. The developer app either holds USDC in Alice's wallet or moves it onward through a payout/offramp route.
 
 ## Step 1: Authenticate The Sender
 
@@ -40,7 +41,7 @@ Keep those concepts separate:
 
 The mobile app signs Alice in with Privy email OTP and sends the Privy access token as the bearer token on backend requests. The backend verifies that Privy token on each authenticated request and uses the verified Privy user as the app user identity.
 
-After app auth, the backend creates a Link auth intent and later stores the Link-authenticated Onramp user. A production app should follow the Stripe Embedded Components Onramp guide for the exact Link auth flow.
+Do not make Link feel like a second app sign-in step. In this sample, Link is presented from the payment method screen, when Alice is ready to pay. The backend creates a Link auth intent and later stores the Link-authenticated Onramp user after Alice consents in Link. A production app should follow the Stripe Embedded Components Onramp guide for the exact Link auth flow.
 
 ## Step 2: Create Or Reuse The Sender Wallet
 
@@ -76,9 +77,11 @@ The backend authorization private key stays server-side. The signer ID and polic
 
 ## Step 3: Register The Wallet With Stripe Onramp
 
-Before creating the Onramp session, register the sender's wallet address with Stripe Onramp through the Stripe SDK.
+Before creating the Onramp session, register the sender's wallet address with Stripe Onramp through the Stripe SDK. In this sample, wallet registration happens from the payment method screen after Link has authorized the Onramp user.
 
 This is standard Onramp behavior covered by the Stripe Embedded Components Onramp guide. The only recipe-specific part is where the address comes from: the registered address is Alice's Privy wallet address from Step 2.
+
+If Stripe Onramp requires more identity information, keep that as a focused KYC flow. This sample routes Alice from the payment method screen into the KYC screens only when needed, then returns to payment method selection.
 
 ## Step 4: Create The Onramp Session
 
@@ -103,7 +106,6 @@ For example:
 
 ```bash
 EXPO_PUBLIC_ONRAMP_NETWORK=tempo
-VITE_ONRAMP_NETWORK=tempo
 REMITTANCE_ONRAMP_NETWORK=tempo
 PRIVY_CAIP2=eip155:4217
 USDC_CONTRACT_ADDRESS=0x...
@@ -112,7 +114,6 @@ USDC_CONTRACT_ADDRESS=0x...
 In this sample:
 
 - `EXPO_PUBLIC_ONRAMP_NETWORK` is used by the mobile app when registering the wallet with Stripe Onramp.
-- `VITE_ONRAMP_NETWORK` is used by the web app when displaying the configured route.
 - `REMITTANCE_ONRAMP_NETWORK` is used by the backend when creating the Onramp session.
 - `PRIVY_CAIP2` is used by the backend for Privy balance lookup and delegated transfer.
 - `USDC_CONTRACT_ADDRESS` is used by the backend when reading USDC balance and encoding ERC-20 transfers.
@@ -158,14 +159,6 @@ EXPO_PUBLIC_PRIVY_WALLET_SIGNER_ID=...
 EXPO_PUBLIC_PRIVY_WALLET_POLICY_IDS=...
 ```
 
-The web app reads client configuration from `web/.env`:
-
-```bash
-VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
-VITE_API_URL=http://localhost:3001
-VITE_ONRAMP_NETWORK=tempo
-```
-
 The backend reads server configuration from `backend/.env`. It needs Stripe credentials:
 
 ```bash
@@ -205,8 +198,6 @@ This sample is one implementation of the recipe. The main integration points are
 | App navigation and screens | `expo/src/navigation/AppNavigator.tsx`, `expo/src/screens/*` |
 | Mobile API client | `expo/src/api/client.ts` |
 | Stripe React Native SDK wrapper | `expo/src/hooks/useOnramp.ts` |
-| Web app | `web/src/App.tsx` |
-| Web API client | `web/src/api.ts` |
 | Backend entrypoint | `backend/server.ts` |
 | Link auth and saved Onramp user state | `backend/routes/auth.ts` |
 | Onramp customer and limits helpers | `backend/routes/onramp.ts` |

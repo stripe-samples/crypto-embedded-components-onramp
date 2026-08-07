@@ -36,12 +36,13 @@ export type RootStackParamList = {
   /** Demo configuration: KYC tier and limit source. */
   Settings: undefined;
   Auth: undefined;
-  Register: { email: string; authToken: string };
-  KYCPrimer: { customerId: string; authToken: string };
-  KYC: { customerId: string; authToken: string };
+  KYCPrimer: { customerId: string; authToken: string; walletAddress: string; network: string };
+  KYC: { customerId: string; authToken: string; walletAddress: string; network: string };
   Address: {
     customerId: string;
     authToken: string;
+    walletAddress: string;
+    network: string;
     firstName: string;
     lastName: string;
     /** Present for L1/L2 only — L0 skips SSN collection. */
@@ -52,18 +53,15 @@ export type RootStackParamList = {
     dobYear?: number;
   };
   Wallet: {
-    customerId: string;
     authToken: string;
   };
-  TransferSetup: {
-    customerId: string;
-    authToken: string;
-  };
+  TransferSetup: undefined;
   PaymentMethod: {
-    customerId: string;
+    customerId?: string;
     authToken: string;
     walletAddress: string;
     network: string;
+    kycSubmitted?: boolean;
     /**
      * Pre-filled when returning from KYCStepUpScreen. Carrying these params
      * back lets PaymentMethod re-check limits for the new tier without asking

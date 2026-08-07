@@ -348,12 +348,7 @@ export default function SuccessScreen({ navigation, route }: Props) {
         {canStartAnotherTransfer && (
           <TouchableOpacity
             style={styles.buttonPrimary}
-            onPress={() =>
-              navigation.navigate('TransferSetup', {
-                customerId: customerId!,
-                authToken: authToken!,
-              })
-            }
+            onPress={() => navigation.navigate('TransferSetup')}
           >
             <Text style={styles.buttonText}>Start another transfer</Text>
           </TouchableOpacity>
