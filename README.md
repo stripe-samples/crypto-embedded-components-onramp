@@ -7,8 +7,8 @@ Sample apps demonstrating the [Stripe Embedded Components Onramp](https://docs.s
 | Directory | Platform | Description |
 |-----------|----------|-------------|
 | [`react-native-expo/`](react-native-expo/) | React Native (Expo) | Full crypto purchase flow using `@stripe/stripe-react-native` — authentication, KYC, wallet registration, and checkout |
-| [`remittance-privy-onramp/`](remittance-privy-onramp/) | React Native (Expo) + Node.js | Stablecoin remittance recipe using Privy wallets and Stripe Onramp |
 | [`react-web/`](react-web/) | React (Web) | Full crypto purchase flow using `@stripe/crypto` — authentication, KYC, wallet registration, and checkout |
+| [`remittance-privy-onramp/`](remittance-privy-onramp/) | React Native (Expo) + React (Web) + Node.js | Stablecoin remittance recipe with mobile and web clients using Privy wallets and Stripe Onramp |
 
 ## Prerequisites
 
