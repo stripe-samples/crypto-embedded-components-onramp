@@ -135,7 +135,10 @@ export async function stripeCallWithRetry(
   return result;
 }
 
-export async function linkPost<T extends StripeApiData = StripeApiData>(path: string, body: object = {}): Promise<T> {
+export async function linkPost<T extends StripeApiData = StripeApiData>(
+  path: string,
+  body: object = {},
+): Promise<{ response: Response; data: T }> {
   const secretKey = STRIPE_SECRET_KEY!;
   const res = await fetch(`${LINK_API}${path}`, {
     method: 'POST',
@@ -145,5 +148,5 @@ export async function linkPost<T extends StripeApiData = StripeApiData>(path: st
     },
     body: JSON.stringify(body),
   });
-  return parseStripeData(await res.json()) as T;
+  return { response: res, data: parseStripeData(await res.json()) as T };
 }

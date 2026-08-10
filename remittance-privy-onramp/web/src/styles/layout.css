@@ -1,0 +1,215 @@
+.app-shell {
+  min-height: 100vh;
+  padding: 0 24px 48px;
+}
+
+.demo-frame {
+  width: min(100%, 680px);
+  margin: 0 auto;
+}
+
+.demo-frame.landing-frame {
+  width: min(100%, 760px);
+}
+
+.page-header {
+  margin: 0 -24px;
+  padding: 0 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-header {
+  width: min(100%, 680px);
+  margin: 0 auto;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #eef1f7;
+  font-weight: 800;
+}
+
+.brand-row svg {
+  color: var(--blue);
+}
+
+.back-button {
+  width: fit-content;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: #cbd3e1;
+  padding: 0 8px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.back-button:hover {
+  color: var(--text);
+}
+
+.header-spacer {
+  min-width: 64px;
+}
+
+.journey-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 22px 0 10px;
+}
+
+.journey-progress button {
+  position: relative;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #687184;
+  padding: 0 4px;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.journey-progress button::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  right: 50%;
+  width: 100%;
+  height: 1px;
+  background: #303747;
+  z-index: 0;
+}
+
+.journey-progress button:first-child::before {
+  display: none;
+}
+
+.journey-progress button.complete {
+  color: #bdc7d8;
+  cursor: pointer;
+}
+
+.journey-progress button.complete::before,
+.journey-progress button.active::before {
+  background: var(--success);
+}
+
+.journey-progress button.active {
+  color: var(--text);
+}
+
+.journey-progress button:disabled {
+  opacity: 1;
+}
+
+.journey-marker {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #384155;
+  border-radius: 50%;
+  background: #171b23;
+  display: grid;
+  place-items: center;
+  color: #7e889b;
+  font-size: 11px;
+}
+
+.journey-progress button.complete .journey-marker {
+  border-color: var(--success);
+  background: var(--success);
+  color: #07140f;
+}
+
+.journey-progress button.active .journey-marker {
+  border-color: var(--primary-strong);
+  background: var(--primary);
+  color: white;
+}
+
+.journey-panel {
+  width: 100%;
+}
+
+.screen {
+  min-height: calc(100vh - 178px);
+  padding: 34px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.landing-screen {
+  min-height: auto;
+  padding: 64px 0 48px;
+}
+
+.landing-brand {
+  margin-bottom: 12px;
+}
+
+.landing-screen h2 {
+  max-width: 620px;
+  font-size: clamp(38px, 7vw, 58px);
+}
+
+.landing-screen > p {
+  max-width: 610px;
+  color: #b8c1d1;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    padding: 0 20px 32px;
+  }
+
+  .page-header {
+    margin: 0 -20px;
+    padding: 0 20px;
+  }
+
+  .app-header {
+    min-height: 64px;
+  }
+
+  .app-header .brand-row span {
+    display: none;
+  }
+
+  .header-spacer {
+    min-width: 52px;
+  }
+
+  .journey-progress {
+    padding-top: 18px;
+  }
+
+  .screen {
+    min-height: calc(100vh - 158px);
+    padding-top: 28px;
+  }
+
+  .landing-screen {
+    min-height: auto;
+    padding: 36px 0 28px;
+  }
+
+  .journey-progress button > span:last-child {
+    font-size: 11px;
+  }
+}

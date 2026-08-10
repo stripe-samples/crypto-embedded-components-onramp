@@ -5,6 +5,7 @@ This sample shows how to build a remittance app where Stripe Onramp delivers USD
 The sample includes:
 
 - An Expo React Native app using `@stripe/stripe-react-native` Embedded Components Onramp.
+- A Vite React app using the web `@stripe/crypto` Embedded Components Onramp SDK.
 - A Node.js backend for Privy session verification, Link auth, Onramp session creation, wallet attachment, fulfillment tracking, and delegated payout handoff.
 - Public docs for the recipe and the implementation sequence.
 
@@ -23,8 +24,11 @@ Because funds land in a user-owned wallet, the same pattern can support immediat
 remittance-privy-onramp/
   backend/  Shared Node.js API used by client apps
   expo/     Expo React Native app
+  web/      Vite React web app
   docs/     Recipe and integration guide
 ```
+
+Both clients organize flow screens under `src/screens` and use the same backend API. The web client uses React, TypeScript, plain CSS, and local UI components; `web/src/RemittanceFlow.tsx` coordinates its shared SDK and flow state.
 
 ## Prerequisites
 
@@ -37,7 +41,7 @@ remittance-privy-onramp/
 
 ## Wallet Ownership And Consent
 
-This sample is structured around a sender-owned, non-custodial Privy wallet. The sender signs in with Privy, the mobile app uses Privy's client SDK to create or reuse the embedded wallet, and the sender explicitly authorizes the app's backend signer for the disclosed remittance flow.
+This sample is structured around a sender-owned, non-custodial Privy wallet. The sender signs in with Privy, the client app uses Privy's client SDK to create or reuse the embedded wallet, and the sender explicitly authorizes the app's backend signer for the disclosed remittance flow.
 
 The backend verifies the Privy access token, checks that the wallet belongs to the authenticated Privy user, stores the wallet mapping, and later uses its delegated signer only for the post-delivery payout handoff.
 
@@ -97,9 +101,29 @@ PRIVY_CAIP2=eip155:4217
 USDC_CONTRACT_ADDRESS=0xYOUR_USDC_CONTRACT_ADDRESS
 ```
 
-`EXPO_PUBLIC_ONRAMP_NETWORK`, `REMITTANCE_ONRAMP_NETWORK`, `PRIVY_CAIP2`, and `USDC_CONTRACT_ADDRESS` must all refer to the same chain and USDC contract.
+The client Onramp network (`EXPO_PUBLIC_ONRAMP_NETWORK` or `VITE_ONRAMP_NETWORK`), `REMITTANCE_ONRAMP_NETWORK`, `PRIVY_CAIP2`, and `USDC_CONTRACT_ADDRESS` must all refer to the same chain and USDC contract.
 
-The backend verifies Privy access tokens with Privy's JWKS-backed SDK verifier, so you do not need to copy a Privy public verification key into `.env`. The Privy signer ID and policy IDs are configured in the Expo app because the sender grants delegated authority from the client.
+The backend verifies Privy access tokens with Privy's JWKS-backed SDK verifier, so you do not need to copy a Privy public verification key into `.env`. The Privy signer ID and policy IDs are configured in each client app because the sender grants delegated authority from the client.
+
+## Configure The Web App
+
+```bash
+cp web/.env.example web/.env
+```
+
+Set:
+
+```bash
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY
+VITE_API_URL=http://localhost:3001
+VITE_ONRAMP_NETWORK=tempo
+VITE_PRIVY_APP_ID=YOUR_PRIVY_APP_ID
+VITE_PRIVY_WALLET_SIGNER_ID=YOUR_PRIVY_KEY_QUORUM_ID
+VITE_PRIVY_WALLET_POLICY_IDS=YOUR_OPTIONAL_POLICY_ID
+```
+
+`VITE_ONRAMP_NETWORK` must match the backend chain configuration.
+`VITE_PRIVY_CLIENT_ID` is optional for React web. Set it only if you create a dedicated Privy web app client; do not reuse the Expo mobile client ID.
 
 ## Run
 
@@ -122,6 +146,22 @@ npm run expo:ios
 # or
 npm run expo:android
 ```
+
+Or start the web app:
+
+```bash
+npm run web
+```
+
+## Deploy The Web App
+
+The web app produces a standard Vite static build and can be deployed to Vercel or another static host:
+
+```bash
+npm run web:build
+```
+
+Set the web environment variables in the deployment environment and point `VITE_API_URL` at the deployed backend.
 
 ## App Flow
 

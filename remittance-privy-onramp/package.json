@@ -9,6 +9,9 @@
     "expo:android": "npm --prefix expo run android",
     "expo:ios": "npm --prefix expo run ios",
     "expo:lint": "npm --prefix expo run lint",
-    "install:all": "npm install --prefix expo && npm install --prefix backend"
+    "web": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:lint": "npm --prefix web run lint",
+    "install:all": "npm install --prefix expo && npm install --prefix web && npm install --prefix backend"
   }
 }

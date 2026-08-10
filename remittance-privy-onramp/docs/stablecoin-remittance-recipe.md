@@ -27,8 +27,8 @@ Alice is in the US and wants to send value to Bob in Mexico through a developer 
 1. Alice starts a remittance to Bob.
 2. Alice signs in with Privy.
 3. Alice enters transfer details.
-4. The developer app uses Privy's client SDK to create or retrieve Alice's sender-owned, non-custodial wallet.
-5. Alice authorizes the developer app's backend signer under a remittance policy.
+4. Alice consents to creating or reusing her wallet and adding the developer app's backend signer under a remittance policy.
+5. The developer app uses Privy's client SDK to create or retrieve Alice's sender-owned, non-custodial wallet and configures that delegated authority in her authenticated session.
 6. Alice continues with Link when she is ready to pay.
 7. Stripe handles Alice's Link authentication, sender checks for the Onramp transaction, payment, risk checks, checkout, and settlement.
 8. Stripe converts the Onramp amount into USDC.
@@ -53,10 +53,9 @@ sequenceDiagram
   Alice->>App: Start remittance
   Alice->>Privy: Sign in
   Alice->>App: Enter transfer details
-  App->>Privy: Create or retrieve Alice's non-custodial wallet through the client SDK
-  Privy-->>App: wallet address
   Alice->>App: Consent to remittance wallet authority
-  App->>Privy: Add backend signer under remittance policy
+  App->>Privy: Create or retrieve wallet and configure backend signer under policy
+  Privy-->>App: wallet identifiers
   Privy-->>App: Delegation configured
 
   Alice->>Stripe: Continue with Link for Onramp
@@ -101,7 +100,7 @@ The developer controls:
 
 ## Wallet And Delegation Model
 
-The Onramp destination should be the sender's wallet. In this sample, Alice signs in with Privy and the mobile app uses Privy's client SDK to create or reuse her non-custodial EVM wallet. The app then asks Alice to authorize the backend signer under a remittance policy.
+The Onramp destination should be the sender's wallet. In this sample, Alice signs in with Privy and the client app uses Privy's client SDK to create or reuse her non-custodial EVM wallet. The app then asks Alice to authorize the backend signer under a remittance policy.
 
 The backend verifies Alice's Privy access token, checks that the attached wallet belongs to Alice's Privy user, stores the wallet mapping, and later uses its delegated signer for the post-delivery payout handoff.
 
@@ -155,6 +154,6 @@ A production implementation should:
 - Keep Privy authorization keys server-side.
 - Store user consent records.
 - Track Onramp status separately from downstream payout status.
-- Avoid relying on the foreground mobile app to advance funds.
+- Avoid relying on a foreground client app to advance funds.
 - Define support and return handling for failed or delayed downstream payout.
 - Review any requirements for wallet ownership, delegated authority, support, receivers, offramps, and local payout routes.

@@ -26,7 +26,7 @@ router.post('/create', async (req: Request, res: Response) => {
 
     const { oauth_scopes } = req.body;
     const record = db.getRecord(user.email);
-    const data = await linkPost<LinkAuthIntentResponse>('/link_auth_intent', {
+    const { response, data } = await linkPost<LinkAuthIntentResponse>('/link_auth_intent', {
       email: user.email,
       oauth_client_id: process.env.OAUTH_CLIENT_ID,
       oauth_scopes: oauth_scopes ?? 'kyc.status:read,crypto:ramp',
@@ -34,7 +34,7 @@ router.post('/create', async (req: Request, res: Response) => {
 
     if (data.error) {
       console.error('[link] create auth intent failed:', JSON.stringify(data.error));
-      return res.status(400).json({ error: data.error.message });
+      return res.status(response.status).json({ error: data.error.message });
     }
     if (!data.id) {
       return res.status(502).json({ error: 'Link did not return an auth intent ID' });
