@@ -37,7 +37,7 @@ remittance-privy-onramp/
 
 ## Wallet Ownership And Consent
 
-This sample is structured around a sender-owned, non-custodial Privy wallet. The sender signs in with Privy, the mobile app creates or reuses the embedded wallet on device, and the sender explicitly authorizes the app's backend signer for the disclosed remittance flow.
+This sample is structured around a sender-owned, non-custodial Privy wallet. The sender signs in with Privy, the mobile app uses Privy's client SDK to create or reuse the embedded wallet, and the sender explicitly authorizes the app's backend signer for the disclosed remittance flow.
 
 The backend verifies the Privy access token, checks that the wallet belongs to the authenticated Privy user, stores the wallet mapping, and later uses its delegated signer only for the post-delivery payout handoff.
 

@@ -27,7 +27,7 @@ Alice is in the US and wants to send value to Bob in Mexico through a developer 
 1. Alice starts a remittance to Bob.
 2. Alice signs in with Privy.
 3. Alice enters transfer details.
-4. The developer app creates or retrieves Alice's sender-owned, non-custodial Privy wallet on device.
+4. The developer app uses Privy's client SDK to create or retrieve Alice's sender-owned, non-custodial wallet.
 5. Alice authorizes the developer app's backend signer under a remittance policy.
 6. Alice continues with Link when she is ready to pay.
 7. Stripe handles Alice's Link authentication, sender checks for the Onramp transaction, payment, risk checks, checkout, and settlement.
@@ -53,7 +53,7 @@ sequenceDiagram
   Alice->>App: Start remittance
   Alice->>Privy: Sign in
   Alice->>App: Enter transfer details
-  App->>Privy: Create or retrieve Alice's non-custodial wallet on device
+  App->>Privy: Create or retrieve Alice's non-custodial wallet through the client SDK
   Privy-->>App: wallet address
   Alice->>App: Consent to remittance wallet authority
   App->>Privy: Add backend signer under remittance policy
@@ -101,7 +101,7 @@ The developer controls:
 
 ## Wallet And Delegation Model
 
-The Onramp destination should be the sender's wallet. In this sample, Alice signs in with Privy and the mobile app creates or reuses her non-custodial Privy EVM wallet on device. The app then asks Alice to authorize the backend signer under a remittance policy.
+The Onramp destination should be the sender's wallet. In this sample, Alice signs in with Privy and the mobile app uses Privy's client SDK to create or reuse her non-custodial EVM wallet. The app then asks Alice to authorize the backend signer under a remittance policy.
 
 The backend verifies Alice's Privy access token, checks that the attached wallet belongs to Alice's Privy user, stores the wallet mapping, and later uses its delegated signer for the post-delivery payout handoff.
 
@@ -118,7 +118,7 @@ This sample uses a preconfigured policy so the integration is easy to run. A pro
 
 The app should explain the wallet-backed flow before wallet creation or delegated transfer authority is configured. The user should understand that:
 
-- A non-custodial wallet is created or reused for them on device.
+- A non-custodial wallet is created or reused for them.
 - Stripe powers the payment and USDC delivery to that wallet.
 - The developer app may use delegated authority to move USDC from that wallet only for the disclosed remittance flow.
 - The developer app controls the downstream experience after USDC reaches the wallet.

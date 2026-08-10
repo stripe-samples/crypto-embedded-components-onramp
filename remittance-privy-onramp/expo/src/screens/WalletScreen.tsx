@@ -1,7 +1,7 @@
 /**
  * WalletScreen - the user authorizes wallet setup for this remittance.
  *
- * The app creates or reuses the user's Privy embedded wallet on device, adds
+ * The app creates or reuses the user's Privy embedded wallet through the client SDK, adds
  * the backend signer/policy the user consents to, and attaches that wallet to
  * the backend. Stripe Onramp wallet registration happens later, after Link
  * authorizes the payment customer.
