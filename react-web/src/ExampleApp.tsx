@@ -406,7 +406,7 @@ const ExampleAppInner: React.FC<{
         );
         log(
           "Register wallet result",
-          `wallet_token=${response.id}, network=${response.network}, verified_ownership=${response.verified_ownership}`,
+          `wallet_token=${response.id}, network=${response.network}, verified_ownership=${(response as any).verified_ownership}`,
         );
         return response;
       } catch (e) {
@@ -500,17 +500,14 @@ const ExampleAppInner: React.FC<{
               },
             );
             const data = await response.json();
-            if (response.ok) {
-              log("Checkout complete", `status=${data.status}`);
-              if (data.transaction_details?.last_error === 'wallet_ownership_verification_required') {
-                throw new Error('wallet_ownership_verification_required');
-              }
-            } else {
-              surfaceError(
-                "Checkout failed",
-                data?.error ?? JSON.stringify(data),
-              );
+            if (!response.ok) {
+              const msg = data?.error?.message ?? data?.error ?? JSON.stringify(data);
+              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
             }
+            if (data.transaction_details?.last_error === 'wallet_ownership_verification_required') {
+              throw new Error('wallet_ownership_verification_required');
+            }
+            log("Checkout callback returned client_secret");
             return data.client_secret as string;
           },
         );

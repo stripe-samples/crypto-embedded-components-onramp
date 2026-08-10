@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Typography } from "@mui/material";
-import type { KycInfo, CryptoNetwork } from "@stripe/crypto";
+import type { KycInfo, CryptoNetwork, CryptoConsumerWallet } from "@stripe/crypto";
 import type { CheckoutError } from "./types";
 import { getNetworks, getExplorerUrl } from "./shared";
 import type { AccountStatus, KycLevel, Wallet, OnrampSession } from "./types";
@@ -33,7 +33,10 @@ export type CliViewProps = {
     country: string,
   ) => Promise<void>;
   onSubmitKycInfo: (info: KycInfo) => Promise<void>;
-  onRegisterWallet: (address: string, network: CryptoNetwork) => Promise<import("@stripe/crypto").CryptoConsumerWallet>;
+  onRegisterWallet: (
+    address: string,
+    network: CryptoNetwork,
+  ) => Promise<CryptoConsumerWallet>;
   onDeleteWallet: (token: string) => Promise<void>;
   onCollectPaymentMethod: (
     types: string[],
@@ -43,6 +46,7 @@ export type CliViewProps = {
   onAddFunds: (
     amount: string,
     currency: string,
+    sourceCurrency: string,
   ) => Promise<OnrampSession | null>;
   onCheckout: (sessionId: string) => Promise<void | CheckoutError>;
   onSelectWallet: (
@@ -563,7 +567,7 @@ export const CliView: React.FC<CliViewProps> = (props) => {
             "cyan",
           );
           try {
-            const s = await props.onAddFunds(amount, currency);
+            const s = await props.onAddFunds(amount, currency, "usd");
             if (s) {
               setSession(s);
               const td = s.transaction_details;

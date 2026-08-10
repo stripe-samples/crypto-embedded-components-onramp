@@ -224,20 +224,16 @@ app.post(
         return res.status(404).json({ error: "Access Token Not Found." });
       }
 
+      const body = new URLSearchParams({
+        "mandate_data[customer_acceptance][type]": "online",
+        "mandate_data[customer_acceptance][accepted_at]": String(Math.floor(Date.now() / 1000)),
+        "mandate_data[customer_acceptance][online][ip_address]": req.ip || req.socket.remoteAddress || "",
+        "mandate_data[customer_acceptance][online][user_agent]": req.headers["user-agent"] || "",
+      });
+
       const response = await axios.post(
         `https://api.stripe.com/v1/crypto/onramp_sessions/${sessionId}/checkout`,
-        {
-          mandate_data: {
-            customer_acceptance: {
-              type: "online",
-              accepted_at: Math.floor(Date.now() / 1000),
-              online: {
-                ip_address: req.ip || req.socket.remoteAddress || "",
-                user_agent: req.headers["user-agent"] || "",
-              },
-            },
-          },
-        },
+        body.toString(),
         {
           headers: {
             Authorization: getBasicAuth(secretKey),
@@ -247,7 +243,7 @@ app.post(
           },
         },
       );
-      res.json(response.data);
+      res.json({ client_secret: response.data.client_secret });
     } catch (error: any) {
       console.error(
         "Error checking out onramp session:",
