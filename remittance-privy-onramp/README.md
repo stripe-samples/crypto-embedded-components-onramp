@@ -28,6 +28,8 @@ remittance-privy-onramp/
   docs/     Recipe and integration guide
 ```
 
+Both clients organize flow screens under `src/screens` and use the same backend API. The web client uses React, TypeScript, plain CSS, and local UI components; `web/src/RemittanceFlow.tsx` coordinates its shared SDK and flow state.
+
 ## Prerequisites
 
 - Node.js v18+
@@ -150,6 +152,16 @@ Or start the web app:
 ```bash
 npm run web
 ```
+
+## Deploy The Web App
+
+The web app produces a standard Vite static build and can be deployed to Vercel or another static host:
+
+```bash
+npm run web:build
+```
+
+Set the web environment variables in the deployment environment and point `VITE_API_URL` at the deployed backend.
 
 ## App Flow
 
