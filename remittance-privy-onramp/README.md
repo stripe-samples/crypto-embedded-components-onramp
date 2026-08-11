@@ -33,6 +33,7 @@ Both clients organize flow screens under `src/screens` and use the same backend 
 ## Prerequisites
 
 - Node.js v18+
+- Docker, or access to an existing PostgreSQL database
 - Expo CLI
 - A physical device, iOS Simulator, or Android Emulator
 - Stripe account with Embedded Components Onramp access
@@ -89,6 +90,7 @@ Set:
 STRIPE_SECRET_KEY=sk_test_YOUR_SECRET_KEY
 OAUTH_CLIENT_ID=YOUR_OAUTH_CLIENT_ID
 OAUTH_CLIENT_SECRET=YOUR_OAUTH_CLIENT_SECRET
+DATABASE_URL=postgresql://remittance:remittance@localhost:5432/remittance
 
 PRIVY_APP_ID=YOUR_PRIVY_APP_ID
 PRIVY_APP_SECRET=YOUR_PRIVY_APP_SECRET
@@ -130,6 +132,8 @@ VITE_PRIVY_WALLET_POLICY_IDS=YOUR_OPTIONAL_POLICY_ID
 Start the backend:
 
 ```bash
+npm run backend:db:start
+npm run backend:db:migrate
 npm run backend
 ```
 
@@ -163,6 +167,8 @@ npm run web:build
 
 Set the web environment variables in the deployment environment and point `VITE_API_URL` at the deployed backend.
 
+The backend can be deployed separately using a hosted PostgreSQL database such as Neon. Set `DATABASE_URL` to its pooled PostgreSQL connection URL and run the committed Drizzle migrations before starting the backend.
+
 ## App Flow
 
 The sample supports two post-delivery modes:
@@ -184,4 +190,4 @@ The user-facing flow is:
 
 ## Production Notes
 
-This sample uses an in-memory backend store and a preconfigured Privy policy to keep the integration easy to inspect. Production implementations should add durable storage, Privy access token verification on privileged backend requests, webhook signature verification, idempotent backend state transitions, persisted consent records, consent-aligned Privy signer/policy lifecycle management, downstream payout status, support workflows for returns or failed payout handoff, and review of any requirements for wallet, receiver, offramp, or local payout experiences.
+This sample uses PostgreSQL for durable workflow state and a preconfigured Privy policy to keep the integration easy to inspect. Production implementations should add webhook signature verification, persisted consent records, consent-aligned Privy signer/policy lifecycle management, downstream payout status, support workflows for returns or failed payout handoff, and review of any requirements for wallet, receiver, offramp, or local payout experiences.

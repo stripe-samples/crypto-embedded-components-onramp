@@ -17,7 +17,7 @@ router.get('/onramp/customer/:customerId', async (req: Request, res: Response) =
     const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const record = db.getRecord(user.email);
+    const record = await db.getRecord(user.privyUserId);
     if (!record) return res.status(404).json({ error: 'User not found' });
 
     const { response, data } = await stripeCallWithRetry(
@@ -79,7 +79,7 @@ router.get('/onramp/limits', async (req: Request, res: Response) => {
     const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const record = db.getRecord(user.email);
+    const record = await db.getRecord(user.privyUserId);
     if (!record) return res.status(404).json({ error: 'User not found' });
 
     const qs = new URLSearchParams();

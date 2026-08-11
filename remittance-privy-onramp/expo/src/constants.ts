@@ -20,6 +20,18 @@ export const NETWORK_NAMES: Record<string, string> = {
   tempo_testnet: 'Tempo Testnet',
 };
 
+const TRANSACTION_EXPLORERS: Record<string, string> = {
+  base: 'https://base.blockscout.com/tx/',
+  base_sepolia: 'https://sepolia.basescan.org/tx/',
+  tempo: 'https://explore.tempo.xyz/tx/',
+  tempo_testnet: 'https://explore.tempo.xyz/tx/',
+};
+
+export function transactionExplorerUrl(network: string, hash: string): string | null {
+  const baseUrl = TRANSACTION_EXPLORERS[network];
+  return baseUrl ? `${baseUrl}${encodeURIComponent(hash)}` : null;
+}
+
 export const DEFAULT_DEMO_NETWORK = process.env.EXPO_PUBLIC_ONRAMP_NETWORK ?? 'tempo';
 export const DEFAULT_DEMO_NETWORK_NAME = NETWORK_NAMES[DEFAULT_DEMO_NETWORK] ?? DEFAULT_DEMO_NETWORK;
 export const PRIVY_WALLET_SIGNER_ID = process.env.EXPO_PUBLIC_PRIVY_WALLET_SIGNER_ID;

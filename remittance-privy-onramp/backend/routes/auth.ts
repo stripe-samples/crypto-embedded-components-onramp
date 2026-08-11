@@ -25,7 +25,6 @@ router.post('/create', async (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const { oauth_scopes } = req.body;
-    const record = db.getRecord(user.email);
     const { response, data } = await linkPost<LinkAuthIntentResponse>('/link_auth_intent', {
       email: user.email,
       oauth_client_id: process.env.OAUTH_CLIENT_ID,
@@ -40,7 +39,7 @@ router.post('/create', async (req: Request, res: Response) => {
       return res.status(502).json({ error: 'Link did not return an auth intent ID' });
     }
 
-    if (record) record.linkAuthIntentId = data.id;
+    await db.setLinkAuthIntent(user.privyUserId, data.id);
 
     console.log(`[auth] created auth intent for ${user.email}: ${data.id}`);
     res.json({ authIntentId: data.id });
@@ -57,10 +56,8 @@ router.post('/save_user', async (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     const { crypto_customer_id } = req.body;
-    const record = db.getRecord(user.email);
+    const record = await db.getRecord(user.privyUserId);
     if (!record) return res.status(404).json({ error: 'User not found' });
-
-    record.cryptoCustomerId = crypto_customer_id;
 
     if (!record.linkAuthIntentId) {
       return res.status(400).json({ error: 'Missing Link auth intent. Please authorize with Link again.' });
@@ -76,9 +73,11 @@ router.post('/save_user', async (req: Request, res: Response) => {
     });
     const tokenData = await tokenRes.json() as LinkTokenResponse;
     if (tokenData.access_token) {
-      record.accessToken = tokenData.access_token;
-      record.refreshToken = tokenData.refresh?.refresh_token ?? null;
-      record.linkAuthIntentId = null;
+      await db.saveOnrampUser(user.privyUserId, {
+        cryptoCustomerId: crypto_customer_id,
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh?.refresh_token ?? null,
+      });
       console.log(`[auth] stored OAuth tokens for ${user.email}`);
     } else {
       console.warn('[auth] token exchange failed:', JSON.stringify(tokenData));

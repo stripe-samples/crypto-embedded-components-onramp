@@ -1,5 +1,5 @@
 import fetch, { Response } from 'node-fetch';
-import { UserRecord } from '../db/store';
+import { updateOAuthTokens, type UserRecord } from '../db/store';
 import { SERVICE_TIMEOUT_ERROR, QUOTE_EXPIRED_ERROR } from '../constants';
 
 const RETRY_COUNT = 6;
@@ -83,7 +83,9 @@ export async function stripeCallWithRefresh(
       const refreshData = parseStripeData(await refreshRes.json()) as OAuthTokenResponse;
       if (refreshData.access_token) {
         record.accessToken = refreshData.access_token;
-        if (refreshData.refresh?.refresh_token) record.refreshToken = refreshData.refresh.refresh_token;
+        const refreshToken = refreshData.refresh?.refresh_token;
+        if (refreshToken) record.refreshToken = refreshToken;
+        await updateOAuthTokens(record.privyUserId, refreshData.access_token, refreshToken);
         console.log(`[oauth] token refreshed successfully, retrying ${path}`);
         response = await makeRequest(record.accessToken);
         data = parseStripeData(await response.json());

@@ -20,7 +20,6 @@ const PRIVY_CAIP2 = process.env.PRIVY_CAIP2 ?? 'eip155:84532';
 const PRIVY_SPONSOR_GAS = process.env.PRIVY_SPONSOR_GAS !== 'false';
 const REMITTANCE_OFFRAMP_DESTINATION_ADDRESS = process.env.REMITTANCE_OFFRAMP_DESTINATION_ADDRESS;
 const REMITTANCE_ONRAMP_NETWORK = process.env.REMITTANCE_ONRAMP_NETWORK ?? 'tempo';
-const activeTransfers = new Set<string>();
 
 type EthereumEmbeddedWalletWithId = Extract<LinkedAccountEmbeddedWallet, { chain_type: 'ethereum' }> & {
   id: string;
@@ -33,9 +32,20 @@ type StripeWebhookPayload = {
       id?: string;
       onramp_session?: string;
       crypto_onramp_session?: string;
+      transaction_details?: {
+        transaction_id?: string;
+      };
     };
   };
 };
+
+function deliveryTransferHash(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const transactionDetails = (value as Record<string, unknown>).transaction_details;
+  if (!transactionDetails || typeof transactionDetails !== 'object') return undefined;
+  const transactionId = (transactionDetails as Record<string, unknown>).transaction_id;
+  return typeof transactionId === 'string' && transactionId ? transactionId : undefined;
+}
 
 function assertEvmAddress(address: string, label: string) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
@@ -147,13 +157,14 @@ function remittanceWalletToApi(record: db.RemittanceWalletRecord) {
   };
 }
 
-function toApi(record: db.RemittanceRecord) {
+function toApi(record: db.RemittanceRecord, deliveryHash?: string) {
   return {
     id: record.id,
     onrampSessionId: record.onrampSessionId,
     status: record.status,
     walletAddress: record.walletAddress,
     network: record.network,
+    deliveryTransferHash: deliveryHash,
     transferHash: record.transferHash,
     error: record.error,
   };
@@ -167,13 +178,13 @@ async function requireOwnedRemittance(req: Request, res: Response) {
   }
 
   const remittanceId = String(req.params.remittanceId);
-  const record = db.getRemittance(remittanceId);
+  const record = await db.getRemittance(remittanceId);
   if (!record) {
     res.status(404).json({ error: 'Remittance not found' });
     return null;
   }
 
-  if (record.ownerEmail !== user.email) {
+  if (record.ownerPrivyUserId !== user.privyUserId) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
@@ -224,11 +235,10 @@ router.post('/remittance_wallet', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Privy wallet is not linked to the authenticated user' });
     }
 
-    const wallet = db.upsertRemittanceWallet({
-      ownerEmail: user.email,
+    const wallet = await db.upsertRemittanceWallet({
+      ownerPrivyUserId: user.privyUserId,
       walletAddress: linkedWallet.address,
       network: REMITTANCE_ONRAMP_NETWORK,
-      privyUserId: privy_user_id,
       privyWalletId: privy_wallet_id,
       offrampDestinationAddress: REMITTANCE_OFFRAMP_DESTINATION_ADDRESS,
     });
@@ -247,7 +257,7 @@ router.post('/remittances', async (req: Request, res: Response) => {
     const user = await db.getUserFromRequest(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const record = db.getRecord(user.email);
+    const record = await db.getRecord(user.privyUserId);
     if (!record) return res.status(404).json({ error: 'User not found' });
 
     const {
@@ -256,8 +266,8 @@ router.post('/remittances', async (req: Request, res: Response) => {
       wallet_address, crypto_customer_id, customer_ip_address, settlement_speed,
     } = req.body;
 
-    const remittanceWallet = db.getRemittanceWalletForDestination(
-      user.email,
+    const remittanceWallet = await db.getRemittanceWalletForDestination(
+      user.privyUserId,
       String(wallet_address),
       String(destination_network),
     );
@@ -292,14 +302,13 @@ router.post('/remittances', async (req: Request, res: Response) => {
       return res.status(502).json({ error: 'Stripe did not return an Onramp session ID' });
     }
 
-    const remittance = db.createRemittance({
-      ownerEmail: user.email,
+    const remittance = await db.createRemittance({
+      ownerPrivyUserId: user.privyUserId,
       remittanceWalletId: remittanceWallet.id,
       onrampSessionId: data.id,
       walletAddress: remittanceWallet.walletAddress,
       network: remittanceWallet.network,
       privyWalletId: remittanceWallet.privyWalletId,
-      privyUserId: remittanceWallet.privyUserId,
       offrampDestinationAddress: remittanceWallet.offrampDestinationAddress,
     });
     console.log(`[remittance] created ${remittance.id} for onramp session ${data.id}`);
@@ -394,7 +403,7 @@ router.get('/remittances/:remittanceId', async (req: Request, res: Response) => 
     let { record } = result;
 
     if (req.query.sync === 'stripe') {
-      const userRecord = db.getRecord(result.user.email);
+      const userRecord = await db.getRecord(result.user.privyUserId);
       if (userRecord) {
         const stripeResult = await stripeCallWithRetry(
           `/crypto/onramp_sessions/${record.onrampSessionId}`,
@@ -405,12 +414,12 @@ router.get('/remittances/:remittanceId', async (req: Request, res: Response) => 
         const status = stripeResult.data?.status;
         const fulfilledStatuses = ['fulfilled', 'fulfillment_completed', 'fulfillment_complete', 'succeeded', 'complete'];
         if (stripeResult.response.ok && status && fulfilledStatuses.includes(status)) {
-          record = db.updateRemittance(record.id, {
-            status: 'onramp_fulfilled',
-            error: undefined,
-          })!;
+          record = (await db.markRemittanceFulfilled(record.id))!;
         }
-        return res.json({ ...toApi(record), stripeStatus: status });
+        return res.json({
+          ...toApi(record, deliveryTransferHash(stripeResult.data)),
+          stripeStatus: status,
+        });
       }
     }
 
@@ -420,34 +429,38 @@ router.get('/remittances/:remittanceId', async (req: Request, res: Response) => 
   }
 });
 
-router.post('/webhooks/stripe', (req: Request, res: Response) => {
-  const event = req.body as StripeWebhookPayload;
-  const sessionId =
-    event?.data?.object?.id ??
-    event?.data?.object?.onramp_session ??
-    event?.data?.object?.crypto_onramp_session;
+router.post('/webhooks/stripe', async (req: Request, res: Response) => {
+  try {
+    const event = req.body as StripeWebhookPayload;
+    const sessionId =
+      event?.data?.object?.id ??
+      event?.data?.object?.onramp_session ??
+      event?.data?.object?.crypto_onramp_session;
 
-  if (event?.type !== 'crypto.onramp_session.fulfillment_completed' && event?.type !== 'fulfillment_completed') {
-    return res.json({ received: true, ignored: true });
+    if (event?.type !== 'crypto.onramp_session.fulfillment_completed' && event?.type !== 'fulfillment_completed') {
+      return res.json({ received: true, ignored: true });
+    }
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Could not determine Onramp session ID from webhook payload' });
+    }
+
+    const record = await db.getRemittanceByOnrampSession(sessionId);
+    if (!record) return res.json({ received: true, ignored: true, reason: 'no local remittance record' });
+
+    const updated = await db.markRemittanceFulfilled(record.id);
+    res.json({
+      received: true,
+      remittance: toApi(updated!, deliveryTransferHash(event.data?.object)),
+    });
+  } catch (err: unknown) {
+    res.status(500).json({ error: errorMessage(err) });
   }
-
-  if (!sessionId) {
-    return res.status(400).json({ error: 'Could not determine Onramp session ID from webhook payload' });
-  }
-
-  const record = db.getRemittanceByOnrampSession(sessionId);
-  if (!record) return res.json({ received: true, ignored: true, reason: 'no local remittance record' });
-
-  const updated = db.updateRemittance(record.id, { status: 'onramp_fulfilled', error: undefined });
-  res.json({ received: true, remittance: toApi(updated!) });
 });
 
 router.post('/remittances/:remittanceId/transfer', async (req: Request, res: Response) => {
   const remittanceId = String(req.params.remittanceId);
-  if (activeTransfers.has(remittanceId)) {
-    return res.status(409).json({ error: 'Payout handoff is already in progress' });
-  }
-  activeTransfers.add(remittanceId);
+  let transferClaimed = false;
   try {
     const result = await requireOwnedRemittance(req, res);
     if (!result) return;
@@ -472,7 +485,7 @@ router.post('/remittances/:remittanceId/transfer', async (req: Request, res: Res
     assertEvmAddress(record.offrampDestinationAddress, 'offramp destination address');
     assertEvmAddress(USDC_CONTRACT_ADDRESS, 'USDC contract address');
 
-    const remittanceWallet = db.getRemittanceWallet(record.remittanceWalletId);
+    const remittanceWallet = await db.getRemittanceWallet(record.remittanceWalletId);
     if (!remittanceWallet) return res.status(400).json({ error: 'Remittance wallet record not found' });
     assertEvmAddress(remittanceWallet.walletAddress, 'source wallet address');
 
@@ -492,8 +505,11 @@ router.post('/remittances/:remittanceId/transfer', async (req: Request, res: Res
 
     const data = encodeUsdcTransfer(record.offrampDestinationAddress, amountUnits);
 
-    const transferAttemptCount = record.transferAttemptCount + 1;
-    db.updateRemittance(record.id, { transferAttemptCount });
+    const claimedRecord = await db.claimRemittanceTransfer(record.id);
+    if (!claimedRecord) {
+      return res.status(409).json({ error: 'Payout handoff is already in progress or complete' });
+    }
+    transferClaimed = true;
 
     const transferInput = {
       caip2: PRIVY_CAIP2,
@@ -510,15 +526,15 @@ router.post('/remittances/:remittanceId/transfer', async (req: Request, res: Res
       authorization_context: {
         authorization_private_keys: [PRIVY_APP_AUTHORIZATION_PRIVATE_KEY],
       },
-      idempotency_key: `remittance-${record.id}-offramp-transfer-${transferAttemptCount}`,
+      idempotency_key: `remittance-${record.id}-offramp-transfer-${claimedRecord.transferAttemptCount}`,
     } satisfies PrivyWalletsService.RpcInput;
 
     const response = await privy.wallets().rpc(remittanceWallet.privyWalletId, transferInput);
     const hash = response.data.hash;
-    const updated = db.updateRemittance(record.id, {
+    const updated = await db.updateRemittance(record.id, {
       status: 'transfer_submitted',
       transferHash: hash,
-      error: undefined,
+      error: null,
     });
 
     res.json(toApi(updated!));
@@ -526,16 +542,14 @@ router.post('/remittances/:remittanceId/transfer', async (req: Request, res: Res
     const parsedError = parseNestedPrivyError(errorMessage(err));
     const message = parsedError.message;
     console.error('[remittance] payout transfer failed:', errorDetails(err));
-    const record = db.getRemittance(remittanceId);
+    const record = transferClaimed ? await db.getRemittance(remittanceId) : undefined;
     if (record) {
-      db.updateRemittance(record.id, {
+      await db.updateRemittance(record.id, {
         status: 'transfer_failed',
         error: message,
       });
     }
     res.status(500).json({ error: message, code: parsedError.code });
-  } finally {
-    activeTransfers.delete(remittanceId);
   }
 });
 

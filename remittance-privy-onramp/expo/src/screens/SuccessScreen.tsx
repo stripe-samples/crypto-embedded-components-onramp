@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Linking, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { getRemittance, triggerRemittanceTransfer, RemittanceResponse } from '../api/client';
-import { DEMO_PAYOUT_PARTNER, NETWORK_NAMES } from '../constants';
+import { DEMO_PAYOUT_PARTNER, NETWORK_NAMES, transactionExplorerUrl } from '../constants';
 import { useTransfer } from '../context/TransferContext';
 
 type Props = {
@@ -22,6 +22,19 @@ type TrackerStep = {
 
 function shorten(value: string): string {
   return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
+}
+
+function TransactionDetail({ hash, label, network }: { hash: string; label: string; network: string }) {
+  const explorerUrl = transactionExplorerUrl(network, hash);
+  return (
+    <Text
+      accessibilityRole={explorerUrl ? 'link' : undefined}
+      onPress={explorerUrl ? () => { void Linking.openURL(explorerUrl); } : undefined}
+      style={[styles.detailMono, explorerUrl && styles.detailLink]}
+    >
+      {label}: {hash}{explorerUrl ? '\nView in explorer' : ''}
+    </Text>
+  );
 }
 
 function statusLabel(status: TrackerStatus): string {
@@ -112,8 +125,10 @@ export default function SuccessScreen({ navigation, route }: Props) {
   const transferInFlightRef = useRef(false);
 
   const isOnrampFulfilled = remittance?.status === 'onramp_fulfilled'
+    || remittance?.status === 'transfer_in_progress'
     || remittance?.status === 'transfer_submitted'
     || remittance?.status === 'transfer_failed';
+  const transferInProgress = remittance?.status === 'transfer_in_progress';
   const transferSubmitted = remittance?.status === 'transfer_submitted';
   const transferFailed = remittance?.status === 'transfer_failed';
   const isHoldMode = transfer.payoutMode === 'hold_in_wallet';
@@ -171,7 +186,9 @@ export default function SuccessScreen({ navigation, route }: Props) {
   const shouldAutoPoll = !!(
     remittanceId &&
     authToken &&
-    (!remittance || remittance.status === 'onramp_session_created')
+    (!remittance ||
+      remittance.status === 'onramp_session_created' ||
+      remittance.status === 'transfer_in_progress')
   );
 
   useEffect(() => {
@@ -219,17 +236,17 @@ export default function SuccessScreen({ navigation, route }: Props) {
       status: isOnrampFulfilled ? 'complete' : 'waiting',
     },
     {
-      title: isHoldMode && isOnrampFulfilled && !transferSubmitted && !transferFailed
+      title: isHoldMode && remittance?.status === 'onramp_fulfilled'
         ? 'Held in wallet'
         : 'Sending to payout partner',
-      body: isHoldMode && isOnrampFulfilled && !transferSubmitted && !transferFailed
+      body: isHoldMode && remittance?.status === 'onramp_fulfilled'
         ? `USDC is in the Privy wallet. The sender can send it to ${DEMO_PAYOUT_PARTNER} when ready.`
         : `The developer backend uses delegated wallet authority to send funds to ${DEMO_PAYOUT_PARTNER}.`,
       status: transferFailed
         ? 'failed'
         : transferSubmitted
           ? 'complete'
-          : transferring
+          : transferInProgress || transferring
             ? 'active'
             : isHoldMode && isOnrampFulfilled
               ? 'ready'
@@ -248,16 +265,18 @@ export default function SuccessScreen({ navigation, route }: Props) {
       <Text style={styles.title}>
         {transferSubmitted
           ? 'Payout handoff submitted'
-          : transferFailed
-            ? 'Payout handoff needs attention'
-            : isOnrampFulfilled
-              ? isHoldMode
-                ? `${destinationCurrencyLabel} held in wallet`
-                : `${destinationCurrencyLabel} delivered`
-              : 'Transfer in progress'}
+          : transferInProgress
+            ? 'Sending to payout partner'
+            : transferFailed
+              ? 'Payout handoff needs attention'
+              : isOnrampFulfilled
+                ? isHoldMode
+                  ? `${destinationCurrencyLabel} held in wallet`
+                  : `${destinationCurrencyLabel} delivered`
+                : 'Transfer in progress'}
       </Text>
       <Text style={styles.subtitle}>
-        {isHoldMode && isOnrampFulfilled && !transferSubmitted
+        {isHoldMode && remittance?.status === 'onramp_fulfilled'
           ? `${amountText} for ${transfer.recipientName} is in the Privy wallet. Send it to payout when ready.`
           : `${amountText} for ${transfer.recipientName} moves through USDC on ${networkName} before the developer app hands it to its payout partner.`}
       </Text>
@@ -318,7 +337,16 @@ export default function SuccessScreen({ navigation, route }: Props) {
             {remittance ? <Text style={styles.detailMono}>Remittance: {remittance.id}</Text> : null}
             {remittance?.stripeStatus ? <Text style={styles.detailMono}>Stripe status: {remittance.stripeStatus}</Text> : null}
             {transactionId ? <Text style={styles.detailMono}>Transaction: {transactionId}</Text> : null}
-            {remittance?.transferHash ? <Text style={styles.detailMono}>Payout tx: {remittance.transferHash}</Text> : null}
+            {remittance?.deliveryTransferHash ? (
+              <TransactionDetail
+                hash={remittance.deliveryTransferHash}
+                label="Onramp delivery tx"
+                network={remittance.network}
+              />
+            ) : null}
+            {remittance?.transferHash ? (
+              <TransactionDetail hash={remittance.transferHash} label="Payout tx" network={remittance.network} />
+            ) : null}
           </>
         ) : null}
         {remittance?.error ? <Text style={styles.errorText}>{remittance.error}</Text> : null}
@@ -483,6 +511,7 @@ const styles = StyleSheet.create({
   detailTitle: { color: '#aaa', fontSize: 14, fontWeight: '800' },
   detailToggle: { color: '#8b85ff', fontSize: 13, fontWeight: '800' },
   detailMono: { color: '#888', fontSize: 11, fontFamily: 'Courier', marginTop: 4 },
+  detailLink: { color: '#8b85ff', textDecorationLine: 'underline' },
   detailActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   smallButtonPrimary: {
     flex: 1,

@@ -517,6 +517,27 @@ p {
   font-size: 12px;
 }
 
+.transaction-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: #9c98ff;
+  text-decoration: none;
+}
+
+.transaction-link code {
+  color: inherit;
+}
+
+.transaction-link svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.transaction-link:hover {
+  text-decoration: underline;
+}
+
 .test-card,
 .status-card {
   border: 1px solid var(--border);

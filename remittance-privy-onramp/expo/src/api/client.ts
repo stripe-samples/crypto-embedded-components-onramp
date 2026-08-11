@@ -128,9 +128,10 @@ export interface OnrampSessionResponse {
 export interface RemittanceResponse {
   id: string;
   onrampSessionId: string;
-  status: 'onramp_session_created' | 'onramp_fulfilled' | 'transfer_submitted' | 'transfer_failed';
+  status: 'onramp_session_created' | 'onramp_fulfilled' | 'transfer_in_progress' | 'transfer_submitted' | 'transfer_failed';
   walletAddress: string;
   network: string;
+  deliveryTransferHash?: string;
   transferHash?: string;
   error?: string;
   stripeStatus?: string;

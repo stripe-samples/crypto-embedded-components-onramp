@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: remittance
+      POSTGRES_USER: remittance
+      POSTGRES_PASSWORD: remittance
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remittance -d remittance"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - remittance_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  remittance_postgres_data:

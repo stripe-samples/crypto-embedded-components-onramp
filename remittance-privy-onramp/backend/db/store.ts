@@ -1,10 +1,20 @@
 import crypto from 'crypto';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Request } from 'express';
 import { type LinkedAccount, type User } from '@privy-io/node';
+import { database } from './client';
+import {
+  remittances,
+  remittanceWallets,
+  users,
+  type RemittanceRow,
+  type RemittanceWalletRow,
+  type UserRow,
+} from './schema';
 import { getPrivyClient } from '../utils/privy';
 
 export interface UserRecord {
-  privyUserId?: string;
+  privyUserId: string;
   cryptoCustomerId: string | null;
   linkAuthIntentId: string | null;
   accessToken: string | null;
@@ -17,42 +27,30 @@ export interface UserWithMeta extends UserRecord {
 
 export interface RemittanceRecord {
   id: string;
-  ownerEmail: string;
+  ownerPrivyUserId: string;
   remittanceWalletId: string;
   onrampSessionId: string;
   walletAddress: string;
   network: string;
   privyWalletId: string;
-  privyUserId?: string;
   offrampDestinationAddress: string;
-  status: 'onramp_session_created' | 'onramp_fulfilled' | 'transfer_submitted' | 'transfer_failed';
+  status: 'onramp_session_created' | 'onramp_fulfilled' | 'transfer_in_progress' | 'transfer_submitted' | 'transfer_failed';
   transferAttemptCount: number;
   transferHash?: string;
   error?: string;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface RemittanceWalletRecord {
   id: string;
-  ownerEmail: string;
+  ownerPrivyUserId: string;
   walletAddress: string;
   network: string;
-  privyUserId: string;
   privyWalletId: string;
   offrampDestinationAddress: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-const users = new Map<string, UserRecord>();
-const remittances = new Map<string, RemittanceRecord>();
-const remittancesByOnrampSession = new Map<string, string>();
-const remittanceWallets = new Map<string, RemittanceWalletRecord>();
-const remittanceWalletsByOwner = new Map<string, string>();
-
-function normalizeAddress(address: string): string {
-  return address.toLowerCase();
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 function isEmailAccount(account: LinkedAccount): account is Extract<LinkedAccount, { type: 'email' }> {
@@ -64,26 +62,44 @@ function getPrimaryEmail(user: User): string | null {
   return email ? email.toLowerCase() : null;
 }
 
-export function createOrUpdatePrivyUser(email: string, privyUserId: string): UserWithMeta {
-  const existing = users.get(email);
-  if (existing) {
-    existing.privyUserId = privyUserId;
-  } else {
-    users.set(email, {
-      privyUserId,
-      cryptoCustomerId: null,
-      linkAuthIntentId: null,
-      accessToken: null,
-      refreshToken: null,
-    });
-  }
-  const record = users.get(email);
-  if (!record) throw new Error('Unable to create user record');
-  return { email, ...record };
+function toUserRecord(row: UserRow): UserWithMeta {
+  return {
+    email: row.email,
+    privyUserId: row.privyUserId,
+    cryptoCustomerId: row.cryptoCustomerId,
+    linkAuthIntentId: row.linkAuthIntentId,
+    accessToken: row.accessToken,
+    refreshToken: row.refreshToken,
+  };
+}
+
+function toRemittanceWalletRecord(row: RemittanceWalletRow): RemittanceWalletRecord {
+  return row;
+}
+
+function toRemittanceRecord(row: RemittanceRow): RemittanceRecord {
+  return {
+    ...row,
+    transferHash: row.transferHash ?? undefined,
+    error: row.error ?? undefined,
+  };
+}
+
+export async function createOrUpdatePrivyUser(email: string, privyUserId: string): Promise<UserWithMeta> {
+  const [row] = await database
+    .insert(users)
+    .values({ privyUserId, email })
+    .onConflictDoUpdate({
+      target: users.privyUserId,
+      set: { email, updatedAt: new Date() },
+    })
+    .returning();
+
+  return toUserRecord(row);
 }
 
 export async function getUserFromRequest(req: Request): Promise<UserWithMeta | null> {
-  const auth = req.headers['authorization'];
+  const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) return null;
 
   const privy = getPrivyClient();
@@ -96,83 +112,171 @@ export async function getUserFromRequest(req: Request): Promise<UserWithMeta | n
   return createOrUpdatePrivyUser(email, verified.user_id);
 }
 
-export function getRecord(email: string): UserRecord | undefined {
-  return users.get(email);
+export async function getRecord(privyUserId: string): Promise<UserWithMeta | undefined> {
+  const [row] = await database.select().from(users).where(eq(users.privyUserId, privyUserId)).limit(1);
+  return row ? toUserRecord(row) : undefined;
 }
 
-export function upsertRemittanceWallet(
+export async function setLinkAuthIntent(privyUserId: string, linkAuthIntentId: string): Promise<void> {
+  await database
+    .update(users)
+    .set({ linkAuthIntentId, updatedAt: new Date() })
+    .where(eq(users.privyUserId, privyUserId));
+}
+
+export async function saveOnrampUser(
+  privyUserId: string,
+  input: {
+    cryptoCustomerId: string;
+    accessToken: string;
+    refreshToken: string | null;
+  },
+): Promise<void> {
+  await database
+    .update(users)
+    .set({
+      cryptoCustomerId: input.cryptoCustomerId,
+      linkAuthIntentId: null,
+      accessToken: input.accessToken,
+      refreshToken: input.refreshToken,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.privyUserId, privyUserId));
+}
+
+export async function updateOAuthTokens(
+  privyUserId: string,
+  accessToken: string,
+  refreshToken?: string,
+): Promise<void> {
+  await database
+    .update(users)
+    .set({
+      accessToken,
+      ...(refreshToken ? { refreshToken } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.privyUserId, privyUserId));
+}
+
+export async function upsertRemittanceWallet(
   input: Omit<RemittanceWalletRecord, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
-): RemittanceWalletRecord {
-  const now = Date.now();
-  const existingId = input.id ?? remittanceWalletsByOwner.get(input.ownerEmail);
-  const existing = existingId ? remittanceWallets.get(existingId) : undefined;
-  const id = existing?.id ?? `rw_${crypto.randomBytes(8).toString('hex')}`;
-  const record: RemittanceWalletRecord = {
-    ...input,
-    id,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
-  remittanceWallets.set(id, record);
-  remittanceWalletsByOwner.set(input.ownerEmail, id);
-  return record;
+): Promise<RemittanceWalletRecord> {
+  const now = new Date();
+  const id = input.id ?? `rw_${crypto.randomBytes(8).toString('hex')}`;
+  const walletAddress = input.walletAddress.toLowerCase();
+  const [row] = await database
+    .insert(remittanceWallets)
+    .values({ ...input, id, walletAddress, updatedAt: now })
+    .onConflictDoUpdate({
+      target: remittanceWallets.ownerPrivyUserId,
+      set: {
+        walletAddress,
+        network: input.network,
+        privyWalletId: input.privyWalletId,
+        offrampDestinationAddress: input.offrampDestinationAddress,
+        updatedAt: now,
+      },
+    })
+    .returning();
+
+  return toRemittanceWalletRecord(row);
 }
 
-export function getRemittanceWallet(id: string): RemittanceWalletRecord | undefined {
-  return remittanceWallets.get(id);
+export async function getRemittanceWallet(id: string): Promise<RemittanceWalletRecord | undefined> {
+  const [row] = await database.select().from(remittanceWallets).where(eq(remittanceWallets.id, id)).limit(1);
+  return row ? toRemittanceWalletRecord(row) : undefined;
 }
 
-export function getRemittanceWalletForOwner(ownerEmail: string): RemittanceWalletRecord | undefined {
-  const id = remittanceWalletsByOwner.get(ownerEmail);
-  return id ? remittanceWallets.get(id) : undefined;
-}
-
-export function getRemittanceWalletForDestination(
-  ownerEmail: string,
+export async function getRemittanceWalletForDestination(
+  ownerPrivyUserId: string,
   walletAddress: string,
   network: string,
-): RemittanceWalletRecord | undefined {
-  const normalizedAddress = normalizeAddress(walletAddress);
-  return Array.from(remittanceWallets.values()).find(record =>
-    record.ownerEmail === ownerEmail &&
-    normalizeAddress(record.walletAddress) === normalizedAddress &&
-    record.network === network
-  );
+): Promise<RemittanceWalletRecord | undefined> {
+  const [row] = await database
+    .select()
+    .from(remittanceWallets)
+    .where(and(
+      eq(remittanceWallets.ownerPrivyUserId, ownerPrivyUserId),
+      eq(remittanceWallets.walletAddress, walletAddress.toLowerCase()),
+      eq(remittanceWallets.network, network),
+    ))
+    .limit(1);
+  return row ? toRemittanceWalletRecord(row) : undefined;
 }
 
-export function createRemittance(
+export async function createRemittance(
   input: Omit<RemittanceRecord, 'id' | 'status' | 'transferAttemptCount' | 'createdAt' | 'updatedAt'>,
-): RemittanceRecord {
-  const now = Date.now();
-  const record: RemittanceRecord = {
-    ...input,
-    id: `remit_${crypto.randomBytes(8).toString('hex')}`,
-    status: 'onramp_session_created',
-    transferAttemptCount: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-  remittances.set(record.id, record);
-  remittancesByOnrampSession.set(input.onrampSessionId, record.id);
-  return record;
+): Promise<RemittanceRecord> {
+  const [row] = await database
+    .insert(remittances)
+    .values({
+      ...input,
+      id: `remit_${crypto.randomBytes(8).toString('hex')}`,
+    })
+    .returning();
+  return toRemittanceRecord(row);
 }
 
-export function getRemittance(id: string): RemittanceRecord | undefined {
-  return remittances.get(id);
+export async function getRemittance(id: string): Promise<RemittanceRecord | undefined> {
+  const [row] = await database.select().from(remittances).where(eq(remittances.id, id)).limit(1);
+  return row ? toRemittanceRecord(row) : undefined;
 }
 
-export function getRemittanceByOnrampSession(onrampSessionId: string): RemittanceRecord | undefined {
-  const id = remittancesByOnrampSession.get(onrampSessionId);
-  return id ? remittances.get(id) : undefined;
+export async function getRemittanceByOnrampSession(
+  onrampSessionId: string,
+): Promise<RemittanceRecord | undefined> {
+  const [row] = await database
+    .select()
+    .from(remittances)
+    .where(eq(remittances.onrampSessionId, onrampSessionId))
+    .limit(1);
+  return row ? toRemittanceRecord(row) : undefined;
 }
 
-export function updateRemittance(
+export async function updateRemittance(
   id: string,
-  patch: Partial<Omit<RemittanceRecord, 'id' | 'onrampSessionId' | 'createdAt'>>,
-): RemittanceRecord | undefined {
-  const record = remittances.get(id);
-  if (!record) return undefined;
-  const updated = { ...record, ...patch, updatedAt: Date.now() };
-  remittances.set(id, updated);
-  return updated;
+  patch: Partial<Omit<RemittanceRecord, 'id' | 'onrampSessionId' | 'createdAt' | 'error' | 'transferHash'>> & {
+    error?: string | null;
+    transferHash?: string | null;
+  },
+): Promise<RemittanceRecord | undefined> {
+  const [row] = await database
+    .update(remittances)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(remittances.id, id))
+    .returning();
+  return row ? toRemittanceRecord(row) : undefined;
+}
+
+export async function markRemittanceFulfilled(id: string): Promise<RemittanceRecord | undefined> {
+  const [updated] = await database
+    .update(remittances)
+    .set({ status: 'onramp_fulfilled', error: null, updatedAt: new Date() })
+    .where(and(
+      eq(remittances.id, id),
+      eq(remittances.status, 'onramp_session_created'),
+    ))
+    .returning();
+
+  if (updated) return toRemittanceRecord(updated);
+  return getRemittance(id);
+}
+
+export async function claimRemittanceTransfer(id: string): Promise<RemittanceRecord | undefined> {
+  const [row] = await database
+    .update(remittances)
+    .set({
+      status: 'transfer_in_progress',
+      transferAttemptCount: sql`${remittances.transferAttemptCount} + 1`,
+      transferHash: null,
+      error: null,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(remittances.id, id),
+      inArray(remittances.status, ['onramp_fulfilled', 'transfer_failed']),
+    ))
+    .returning();
+  return row ? toRemittanceRecord(row) : undefined;
 }
