@@ -43,6 +43,7 @@ export interface CryptoCustomerResponse {
   kycTiers: KycTierEntry[];
   verifications: Array<{ name: string; status: string; errors: string[] }>;
   provided_fields: string[];
+  kycRegion: 'us' | 'eu' | null;
 }
 
 /**

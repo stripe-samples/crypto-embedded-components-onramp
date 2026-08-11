@@ -65,6 +65,7 @@ router.get('/crypto_customer/:customerId', async (req: Request, res: Response) =
       kycTiers,
       verifications,
       provided_fields,
+      kycRegion: data.kyc_region ?? null,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
