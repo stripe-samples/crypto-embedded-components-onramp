@@ -77,6 +77,8 @@ The backend verifies that the wallet belongs to Alice's Privy user and stores th
 }
 ```
 
+Persistent user and wallet records are keyed by the verified Privy user ID. Email is stored as profile and Link data, but it is not used as the ownership key because it can change.
+
 The backend authorization private key stays server-side. The signer ID and policy ID are public identifiers used by the client to grant delegated authority; they are not secrets.
 
 ## Step 3: Register The Wallet With Stripe Onramp
@@ -182,6 +184,7 @@ The backend reads server configuration from `backend/.env`. It needs Stripe cred
 STRIPE_SECRET_KEY=sk_test_...
 OAUTH_CLIENT_ID=...
 OAUTH_CLIENT_SECRET=...
+DATABASE_URL=postgresql://remittance:remittance@localhost:5432/remittance
 ```
 
 It also needs Privy credentials:
@@ -222,7 +225,7 @@ This sample is one implementation of the recipe. The main integration points are
 | Link auth and saved Onramp user state | `backend/routes/auth.ts` |
 | Onramp customer and limits helpers | `backend/routes/onramp.ts` |
 | Wallet, remittance, fulfillment, payout handoff | `backend/routes/remittances.ts` |
-| In-memory sample storage | `backend/db/store.ts` |
+| Durable workflow storage | `backend/db/schema.ts`, `backend/db/store.ts` |
 
 The sample backend exposes these routes:
 
@@ -242,11 +245,10 @@ The sample backend exposes these routes:
 
 ## Production Checklist
 
-- Replace the in-memory store with durable storage.
-- Verify Privy access tokens on every privileged backend request.
 - Verify Stripe webhook signatures.
 - Make backend state transitions idempotent.
 - Store user consent records for wallet creation and delegated wallet actions.
+- Treat stored Link OAuth tokens as secrets and restrict database access.
 - Keep Privy authorization keys server-side.
 - Scope Privy delegated signer and policy controls as narrowly as possible.
 - Do not depend on a foreground client app to advance funds after Onramp fulfillment.

@@ -4,6 +4,18 @@ export function networkName(network: string): string {
   return NETWORK_NAMES[network] ?? network;
 }
 
+const TRANSACTION_EXPLORERS: Record<string, string> = {
+  base: 'https://base.blockscout.com/tx/',
+  base_sepolia: 'https://sepolia.basescan.org/tx/',
+  tempo: 'https://explore.tempo.xyz/tx/',
+  tempo_testnet: 'https://explore.tempo.xyz/tx/',
+};
+
+export function transactionExplorerUrl(network: string, hash: string): string | null {
+  const baseUrl = TRANSACTION_EXPLORERS[network];
+  return baseUrl ? `${baseUrl}${encodeURIComponent(hash)}` : null;
+}
+
 export function formatCurrency(amount: string | number, currency: string): string {
   const value = typeof amount === 'string' ? Number.parseFloat(amount) : amount;
   if (!Number.isFinite(value)) return `-- ${currency.toUpperCase()}`;

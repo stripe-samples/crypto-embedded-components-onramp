@@ -100,6 +100,7 @@ export type OnrampSessionResponse = {
 export type RemittanceStatus =
   | 'onramp_session_created'
   | 'onramp_fulfilled'
+  | 'transfer_in_progress'
   | 'transfer_submitted'
   | 'transfer_failed';
 
@@ -109,6 +110,7 @@ export type RemittanceResponse = {
   status: RemittanceStatus;
   walletAddress: string;
   network: string;
+  deliveryTransferHash?: string;
   transferHash?: string;
   error?: string;
   stripeStatus?: string;

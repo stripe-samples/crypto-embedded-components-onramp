@@ -715,7 +715,7 @@ export default function RemittanceFlow() {
 
   useEffect(() => {
     if (step !== 'tracker' || !remittance?.id || !authToken) return;
-    if (remittance.status !== 'onramp_session_created') return;
+    if (remittance.status !== 'onramp_session_created' && remittance.status !== 'transfer_in_progress') return;
     const interval = window.setInterval(() => {
       void pollRemittance(false);
     }, 4000);
@@ -767,8 +767,10 @@ export default function RemittanceFlow() {
 
   const isOnrampFulfilled =
     remittance?.status === 'onramp_fulfilled' ||
+    remittance?.status === 'transfer_in_progress' ||
     remittance?.status === 'transfer_submitted' ||
     remittance?.status === 'transfer_failed';
+  const transferInProgress = remittance?.status === 'transfer_in_progress';
   const transferSubmitted = remittance?.status === 'transfer_submitted';
   const transferFailed = remittance?.status === 'transfer_failed';
   const isHoldMode = transfer.payoutMode === 'hold_in_wallet';
@@ -796,17 +798,17 @@ export default function RemittanceFlow() {
       status: isOnrampFulfilled ? 'complete' : 'waiting',
     },
     {
-      title: isHoldMode && isOnrampFulfilled && !transferSubmitted && !transferFailed
+      title: isHoldMode && remittance?.status === 'onramp_fulfilled'
         ? 'Held in wallet'
         : 'Sending to payout partner',
-      body: isHoldMode && isOnrampFulfilled && !transferSubmitted && !transferFailed
+      body: isHoldMode && remittance?.status === 'onramp_fulfilled'
         ? `USDC is in your Privy wallet. You can send it to ${DEMO_PAYOUT_PARTNER} when ready.`
         : `The developer backend uses delegated wallet authority to send funds to ${DEMO_PAYOUT_PARTNER}.`,
       status: transferFailed
         ? 'failed'
         : transferSubmitted
           ? 'complete'
-          : transferLoading
+          : transferInProgress || transferLoading
             ? 'active'
             : isHoldMode && isOnrampFulfilled
               ? 'ready'
@@ -974,6 +976,7 @@ export default function RemittanceFlow() {
               trackerSteps={trackerSteps}
               transfer={transfer}
               transferFailed={transferFailed}
+              transferInProgress={transferInProgress}
               transferLoading={transferLoading}
               transferSubmitted={transferSubmitted}
               walletAddress={walletAddress}
