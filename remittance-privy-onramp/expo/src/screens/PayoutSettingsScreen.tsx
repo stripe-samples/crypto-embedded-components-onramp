@@ -90,7 +90,7 @@ export default function PayoutSettingsScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  content: { backgroundColor: '#141414', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32 },
+  content: { backgroundColor: '#1a1a1a', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 32 },
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
   heading: { flex: 1 },
   kicker: { color: '#8db8ff', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },

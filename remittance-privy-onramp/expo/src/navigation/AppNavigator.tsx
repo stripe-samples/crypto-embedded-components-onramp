@@ -42,7 +42,7 @@ export default function AppNavigator() {
             name="PayoutSettings"
             component={PayoutSettingsScreen}
             options={{
-              contentStyle: { backgroundColor: '#141414' },
+              contentStyle: { backgroundColor: '#1a1a1a' },
               headerShown: false,
               presentation: 'formSheet',
               sheetAllowedDetents: 'fitToContents',
