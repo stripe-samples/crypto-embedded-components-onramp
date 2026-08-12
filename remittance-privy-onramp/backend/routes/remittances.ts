@@ -18,7 +18,6 @@ const PRIVY_APP_AUTHORIZATION_PRIVATE_KEY = process.env.PRIVY_APP_AUTHORIZATION_
 const USDC_CONTRACT_ADDRESS = process.env.USDC_CONTRACT_ADDRESS;
 const PRIVY_CAIP2 = process.env.PRIVY_CAIP2 ?? 'eip155:84532';
 const PRIVY_SPONSOR_GAS = process.env.PRIVY_SPONSOR_GAS !== 'false';
-const REMITTANCE_OFFRAMP_DESTINATION_ADDRESS = process.env.REMITTANCE_OFFRAMP_DESTINATION_ADDRESS;
 const REMITTANCE_ONRAMP_NETWORK = process.env.REMITTANCE_ONRAMP_NETWORK ?? 'tempo';
 
 type EthereumEmbeddedWalletWithId = Extract<LinkedAccountEmbeddedWallet, { chain_type: 'ethereum' }> & {
@@ -48,9 +47,13 @@ function deliveryTransferHash(value: unknown): string | undefined {
 }
 
 function assertEvmAddress(address: string, label: string) {
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+  if (!isEvmAddress(address)) {
     throw new Error(`${label} must be a valid EVM address`);
   }
+}
+
+function isEvmAddress(address: string) {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
 function toUnits(amount: string, decimals = 6): bigint {
@@ -164,6 +167,7 @@ function toApi(record: db.RemittanceRecord, deliveryHash?: string) {
     status: record.status,
     walletAddress: record.walletAddress,
     network: record.network,
+    payoutDestinationAddress: record.offrampDestinationAddress,
     deliveryTransferHash: deliveryHash,
     transferHash: record.transferHash,
     error: record.error,
@@ -254,16 +258,20 @@ router.post('/remittances', async (req: Request, res: Response) => {
 
     const record = await db.getRecord(user.privyUserId);
     if (!record) return res.status(404).json({ error: 'User not found' });
-    if (!REMITTANCE_OFFRAMP_DESTINATION_ADDRESS) {
-      throw new Error('REMITTANCE_OFFRAMP_DESTINATION_ADDRESS must be set in backend/.env');
-    }
-    assertEvmAddress(REMITTANCE_OFFRAMP_DESTINATION_ADDRESS, 'offramp destination address');
-
     const {
       payment_token, source_amount, source_currency,
       destination_currency, destination_network, destination_networks,
       wallet_address, crypto_customer_id, customer_ip_address, settlement_speed,
+      payout_destination_address,
     } = req.body;
+
+    if (typeof payout_destination_address !== 'string' || !payout_destination_address.trim()) {
+      return res.status(400).json({ error: 'payout_destination_address is required' });
+    }
+    const payoutDestinationAddress = payout_destination_address.trim();
+    if (!isEvmAddress(payoutDestinationAddress)) {
+      return res.status(400).json({ error: 'payout_destination_address must be a valid EVM address' });
+    }
 
     const remittanceWallet = await db.getRemittanceWalletForDestination(
       user.privyUserId,
@@ -308,7 +316,7 @@ router.post('/remittances', async (req: Request, res: Response) => {
       walletAddress: remittanceWallet.walletAddress,
       network: remittanceWallet.network,
       privyWalletId: remittanceWallet.privyWalletId,
-      offrampDestinationAddress: REMITTANCE_OFFRAMP_DESTINATION_ADDRESS,
+      offrampDestinationAddress: payoutDestinationAddress,
     });
     console.log(`[remittance] created ${remittance.id} for onramp session ${data.id}`);
 

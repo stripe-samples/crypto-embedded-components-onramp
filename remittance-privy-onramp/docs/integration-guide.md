@@ -100,6 +100,8 @@ The remittance-specific part is the session destination:
 - `wallet_address=<sender Privy wallet address>`
 - `crypto_customer_id=<Link-authenticated crypto customer>`
 
+The sample's `POST /v1/remittances` request also includes `payout_destination_address`. This is not a Stripe Onramp parameter. The backend validates it and stores it on the local remittance so a later delegated transfer cannot substitute a different destination.
+
 From Stripe Onramp's perspective, this is still a normal Onramp session. The destination happens to be a Privy wallet that the developer app created or reused for the sender.
 
 The app can then use the normal Embedded Components Onramp flow for quote refresh, payment method selection, and checkout.
@@ -143,13 +145,13 @@ After Stripe delivers USDC to the sender wallet, the developer app decides what 
 This sample supports two modes:
 
 - `Hold in wallet`: USDC remains in Alice's Privy wallet after Onramp fulfillment.
-- `Auto send to payout`: after fulfillment, the backend submits a delegated USDC transfer to the configured payout/offramp destination.
+- `Auto send to payout`: after fulfillment, the backend submits a delegated USDC transfer to the payout destination stored on the remittance.
 
 If your product moves funds automatically, use Privy delegated authority and policies to keep that action narrowly scoped. For example, scope by asset, chain, destination, amount, and action type where possible.
 
 This sample uses a preconfigured policy for simplicity. In production, prefer consent-aligned policies. For a one-off remittance, that often means creating or selecting a narrow policy for the specific remittance intent once the destination, amount, asset, chain, and expiry are known. For a wallet or balance product with repeated transfers, a per-wallet policy with explicit limits and approved destinations may fit better.
 
-The downstream destination depends on the product. It could be Bob's wallet, an offramp provider address, or another approved route supported by the developer app.
+The downstream destination depends on the product. It could be Bob's wallet, an offramp provider address, or another approved route supported by the developer app. This demo asks for an EVM address on the landing page and persists it locally before sending it with remittance creation. A production app should normally derive or validate that address from its selected payout route.
 
 ## Configuration Summary
 
@@ -202,7 +204,6 @@ And the downstream transfer configuration:
 
 ```bash
 REMITTANCE_ONRAMP_NETWORK=tempo
-REMITTANCE_OFFRAMP_DESTINATION_ADDRESS=0x...
 PRIVY_CAIP2=eip155:4217
 USDC_CONTRACT_ADDRESS=0x...
 ```
@@ -236,7 +237,7 @@ The sample backend exposes these routes:
 | GET | `/v1/onramp/customer/:id` | Read Onramp customer/KYC status |
 | GET | `/v1/onramp/limits` | Read Onramp transaction limits |
 | POST | `/v1/remittance_wallet` | Attach and verify the sender's client-created Privy wallet |
-| POST | `/v1/remittances` | Create a Stripe Onramp session and local remittance |
+| POST | `/v1/remittances` | Validate the payout destination and create a Stripe Onramp session plus local remittance |
 | POST | `/v1/remittances/:remittanceId/quote` | Refresh the Onramp quote |
 | POST | `/v1/remittances/:remittanceId/checkout` | Complete checkout and return SDK client secret |
 | GET | `/v1/remittances/:remittanceId` | Read local remittance status, optionally syncing from Stripe |
@@ -251,6 +252,7 @@ The sample backend exposes these routes:
 - Treat stored Link OAuth tokens as secrets and restrict database access.
 - Keep Privy authorization keys server-side.
 - Scope Privy delegated signer and policy controls as narrowly as possible.
+- Derive or allowlist payout destinations instead of trusting arbitrary client input.
 - Do not depend on a foreground client app to advance funds after Onramp fulfillment.
 - Track downstream payout/offramp status separately from Stripe Onramp status.
 - Define support and return handling for failed or delayed downstream payout.

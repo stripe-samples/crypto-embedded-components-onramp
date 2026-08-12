@@ -35,6 +35,7 @@ export type RootStackParamList = {
   Home: undefined;
   /** Demo configuration: KYC tier and limit source. */
   Settings: undefined;
+  PayoutSettings: { continueToAuth: boolean };
   Auth: undefined;
   KYCPrimer: { customerId: string; authToken: string; walletAddress: string; network: string };
   KYC: { customerId: string; authToken: string; walletAddress: string; network: string };

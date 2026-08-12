@@ -130,6 +130,7 @@ export function createRemittance(params: {
   sourceAmount: number;
   sourceCurrency: string;
   destinationCurrency: string;
+  payoutDestinationAddress: string;
 }): Promise<ApiResult<CreateRemittanceResponse>> {
   return post(
     '/v1/remittances',
@@ -142,6 +143,7 @@ export function createRemittance(params: {
       destination_network: params.destinationNetwork,
       destination_networks: [params.destinationNetwork],
       wallet_address: params.walletAddress,
+      payout_destination_address: params.payoutDestinationAddress,
       crypto_customer_id: params.customerId,
       customer_ip_address: '127.0.0.1',
     },

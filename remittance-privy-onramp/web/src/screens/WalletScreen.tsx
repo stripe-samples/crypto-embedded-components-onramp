@@ -1,6 +1,7 @@
 import { LockKeyhole } from 'lucide-react';
 import { PrimaryButton, SummaryRow } from '../components/ui';
 import type { TransferIntent } from '../types';
+import { shorten } from '../utils';
 
 type SetupStage = 'idle' | 'creating_wallet' | 'authorizing_wallet' | 'attaching_wallet' | 'ready';
 
@@ -9,6 +10,7 @@ export function WalletScreen({
   isHoldMode,
   onContinue,
   onPrepare,
+  payoutDestinationAddress,
   routeNetworkName,
   stage,
   transfer,
@@ -18,6 +20,7 @@ export function WalletScreen({
   isHoldMode: boolean;
   onContinue: () => void;
   onPrepare: () => void;
+  payoutDestinationAddress: string;
   routeNetworkName: string;
   stage: SetupStage;
   transfer: TransferIntent;
@@ -36,6 +39,7 @@ export function WalletScreen({
         <SummaryRow label="Transfer" value={`$${transfer.amountUsd || '0'} USD`} />
         <SummaryRow label="Recipient" value={transfer.recipientName} />
         <SummaryRow label="Route" value={`USDC on ${routeNetworkName}`} />
+        <SummaryRow label="Payout wallet" value={shorten(payoutDestinationAddress)} />
         <SummaryRow label="Payout mode" value={isHoldMode ? 'Hold in wallet' : 'Auto send to payout'} />
       </div>
       <div className="consent-card">

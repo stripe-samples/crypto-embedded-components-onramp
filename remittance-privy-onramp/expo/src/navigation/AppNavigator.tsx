@@ -7,6 +7,7 @@ import { TransferProvider } from '../context/TransferContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import PayoutSettingsScreen from '../screens/PayoutSettingsScreen';
 import AuthScreen from '../screens/AuthScreen';
 import KYCPrimerScreen from '../screens/KYCPrimerScreen';
 import KYCScreen from '../screens/KYCScreen';
@@ -22,7 +23,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   return (
-    // SettingsProvider persists the demo configuration (KYC tier, limit source)
+    // SettingsProvider persists the demo configuration
     // to AsyncStorage and makes it available to all screens via useSettings().
     <SettingsProvider>
       <TransferProvider>
@@ -37,6 +38,18 @@ export default function AppNavigator() {
         >
           <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Demo Settings' }} />
+          <Stack.Screen
+            name="PayoutSettings"
+            component={PayoutSettingsScreen}
+            options={{
+              contentStyle: { backgroundColor: '#141414' },
+              headerShown: false,
+              presentation: 'formSheet',
+              sheetAllowedDetents: 'fitToContents',
+              sheetExpandsWhenScrolledToEdge: false,
+              sheetGrabberVisible: true,
+            }}
+          />
           <Stack.Screen name="Auth" component={AuthScreen} options={{ title: 'Sign In' }} />
           <Stack.Screen name="KYCPrimer" component={KYCPrimerScreen} options={{ title: 'Verify Identity' }} />
           <Stack.Screen name="KYC" component={KYCScreen} options={{ title: 'Personal Info' }} />

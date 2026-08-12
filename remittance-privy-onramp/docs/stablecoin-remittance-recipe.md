@@ -26,7 +26,7 @@ Alice is in the US and wants to send value to Bob in Mexico through a developer 
 
 1. Alice starts a remittance to Bob.
 2. Alice signs in with Privy.
-3. Alice enters transfer details.
+3. Alice enters transfer details, and the developer app selects Bob's downstream payout route.
 4. Alice consents to creating or reusing her wallet and adding the developer app's backend signer under a remittance policy.
 5. The developer app uses Privy's client SDK to create or retrieve Alice's sender-owned, non-custodial wallet and configures that delegated authority in her authenticated session.
 6. Alice continues with Link when she is ready to pay.
@@ -138,11 +138,11 @@ The Stripe Onramp quote covers the Onramp leg. The developer controls downstream
 The recipe supports two product modes:
 
 - Hold in wallet: USDC remains in Alice's wallet after Onramp fulfillment until Alice chooses to send it onward.
-- Auto send to payout: after Onramp fulfillment, the developer backend submits the delegated USDC transfer to the configured payout/offramp destination.
+- Auto send to payout: after Onramp fulfillment, the developer backend submits the delegated USDC transfer to the payout destination stored on the remittance.
 
 Both modes use the same Onramp delivery boundary. The difference is what the developer does after USDC reaches the sender's wallet.
 
-The downstream destination can vary by product. A developer can send USDC to a receiver wallet, an offramp provider, or another approved destination. The sample uses one configured payout/offramp address so the integration is easy to run end to end.
+The downstream destination can vary by product. A developer can send USDC to a receiver wallet, an offramp provider, or another approved destination. The sample lets the person running the demo configure an EVM payout address, then stores that address on the remittance. A production app should derive or validate the destination from its payout route and align the delegated policy with that destination.
 
 ## Production Notes
 

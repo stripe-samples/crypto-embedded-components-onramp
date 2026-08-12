@@ -27,6 +27,10 @@ export function shorten(value: string): string {
   return value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
 }
 
+export function isEvmAddress(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+}
+
 export function digitsOnly(value: string, maxLength: number): string {
   return value.replace(/\D/g, '').slice(0, maxLength);
 }

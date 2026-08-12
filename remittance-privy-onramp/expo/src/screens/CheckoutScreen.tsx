@@ -11,6 +11,7 @@ import { refreshQuote, checkoutSession, QuoteResponse } from '../api/client';
 import { DEMO_PAYOUT_PARTNER, NETWORK_NAMES, SERVICE_TIMEOUT_ERROR } from '../constants';
 import { errorMessage } from '../errors';
 import { useTransfer } from '../context/TransferContext';
+import { useSettings } from '../context/SettingsContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Checkout'>;
@@ -44,6 +45,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
 
   const { performCheckout } = useOnramp();
   const { transfer } = useTransfer();
+  const { settings } = useSettings();
 
   const destCurrencyUpper = destinationCurrency.toUpperCase();
   const networkName = NETWORK_NAMES[network] ?? network;
@@ -168,7 +170,12 @@ export default function CheckoutScreen({ navigation, route }: Props) {
 
         <View style={styles.cardRow}>
           <Text style={styles.rowLabel}>Payout</Text>
-          <Text style={styles.rowValue}>{DEMO_PAYOUT_PARTNER}</Text>
+          <View style={styles.rowValueCol}>
+            <Text style={styles.rowValue}>{DEMO_PAYOUT_PARTNER}</Text>
+            <Text style={styles.rowValueSub}>
+              Wallet {truncateAddress(settings.payoutDestinationAddress)}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.divider} />

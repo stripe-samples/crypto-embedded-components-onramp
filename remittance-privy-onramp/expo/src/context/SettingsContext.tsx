@@ -1,7 +1,7 @@
 /**
  * SettingsContext — app-wide demo configuration persisted to AsyncStorage.
  *
- * Two knobs are exposed:
+ * Demo settings include:
  *
  *   kycTier      Controls which identity-verification steps the user completes
  *                before the onramp flow begins. See `KycTier` for details.
@@ -9,6 +9,9 @@
  *   limitSource  Where the app reads transaction limits from before checkout.
  *                'api'   → real-time GET /v1/onramp/limits
  *                'local' → hardcoded table in src/kycLimits.ts
+ *
+ *   payoutDestinationAddress
+ *                EVM address used for the post-Onramp payout handoff.
  *
  * Wrap the navigation root with <SettingsProvider> and read settings in any
  * screen with the useSettings() hook.
@@ -60,6 +63,7 @@ export type LimitSource = 'api' | 'local';
 export interface AppSettings {
   kycTier: KycTier;
   limitSource: LimitSource;
+  payoutDestinationAddress: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +73,7 @@ export interface AppSettings {
 const DEFAULT_SETTINGS: AppSettings = {
   kycTier: 'L1',
   limitSource: 'local',
+  payoutDestinationAddress: '',
 };
 
 const STORAGE_KEY = '@crypto_onramp_settings_v1';
@@ -96,7 +101,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY).then(raw => {
       if (raw) {
         try {
-          setSettings(JSON.parse(raw));
+          setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
         } catch {
           // Ignore corrupt data — fall back to defaults.
         }

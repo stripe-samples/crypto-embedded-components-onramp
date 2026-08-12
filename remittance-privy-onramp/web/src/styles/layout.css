@@ -157,7 +157,11 @@
   padding: 64px 0 48px;
 }
 
-.landing-brand {
+.landing-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 12px;
 }
 

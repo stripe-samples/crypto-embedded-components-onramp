@@ -96,6 +96,9 @@ export function SuccessScreen({
         <div className="details-card">
           {walletAddress ? <code>Wallet: {walletAddress}</code> : null}
           {remittance ? <code>Remittance: {remittance.id}</code> : null}
+          {remittance?.payoutDestinationAddress ? (
+            <code>Payout wallet: {remittance.payoutDestinationAddress}</code>
+          ) : null}
           {remittance?.onrampSessionId ? <code>Onramp session: {remittance.onrampSessionId}</code> : null}
           {remittance?.stripeStatus ? <code>Stripe status: {remittance.stripeStatus}</code> : null}
           {remittance?.deliveryTransferHash ? (
