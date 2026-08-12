@@ -1,4 +1,4 @@
-import { index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { integer, pgEnum, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const remittanceStatus = pgEnum('remittance_status', [
   'onramp_session_created',
@@ -10,16 +10,13 @@ export const remittanceStatus = pgEnum('remittance_status', [
 
 export const users = pgTable('users', {
   privyUserId: text('privy_user_id').primaryKey(),
-  email: text('email').notNull(),
   cryptoCustomerId: text('crypto_customer_id'),
   linkAuthIntentId: text('link_auth_intent_id'),
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-}, table => [
-  index('users_email_idx').on(table.email),
-]);
+});
 
 export const remittanceWallets = pgTable('remittance_wallets', {
   id: text('id').primaryKey(),
@@ -29,7 +26,6 @@ export const remittanceWallets = pgTable('remittance_wallets', {
   walletAddress: text('wallet_address').notNull(),
   network: text('network').notNull(),
   privyWalletId: text('privy_wallet_id').notNull(),
-  offrampDestinationAddress: text('offramp_destination_address').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [

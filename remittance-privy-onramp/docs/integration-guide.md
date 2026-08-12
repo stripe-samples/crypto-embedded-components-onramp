@@ -77,7 +77,7 @@ The backend verifies that the wallet belongs to Alice's Privy user and stores th
 }
 ```
 
-Persistent user and wallet records are keyed by the verified Privy user ID. Email is stored as profile and Link data, but it is not used as the ownership key because it can change.
+Persistent user and wallet records are keyed by the verified Privy user ID. The backend reads the linked email from Privy when starting Link authentication, but does not persist it because email can change and is not the ownership key.
 
 The backend authorization private key stays server-side. The signer ID and policy ID are public identifiers used by the client to grant delegated authority; they are not secrets.
 
