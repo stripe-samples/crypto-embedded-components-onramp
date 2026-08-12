@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Settings2 as SettingsIcon } from 'lucide-react-native';
 import { RootStackParamList } from '../types';
 import { DEFAULT_DEMO_NETWORK_NAME, MERCHANT_DISPLAY_NAME } from '../constants';
 import { PayoutMode, useTransfer } from '../context/TransferContext';
@@ -42,6 +43,7 @@ export default function HomeScreen({ navigation }: Props) {
       <View style={styles.landingToolbar}>
         <Text style={styles.brand}>{MERCHANT_DISPLAY_NAME}</Text>
         <TouchableOpacity onPress={() => openSettings()} style={styles.settingsButton}>
+          <SettingsIcon color="#b8c1d1" size={17} />
           <Text style={styles.settingsButtonText}>Demo settings</Text>
         </TouchableOpacity>
       </View>
@@ -125,7 +127,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   brand: { color: '#8db8ff', fontSize: 13, fontWeight: '800', textTransform: 'uppercase' },
-  settingsButton: { minHeight: 40, justifyContent: 'center' },
+  settingsButton: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 7 },
   settingsButtonText: { color: '#b8c1d1', fontSize: 13, fontWeight: '700' },
   title: { color: '#fff', fontSize: 40, fontWeight: '800', lineHeight: 46, marginBottom: 12 },
   subtitle: { color: '#aaa', fontSize: 16, lineHeight: 23, marginBottom: 28 },

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { X } from 'lucide-react-native';
 import { DEFAULT_DEMO_NETWORK_NAME } from '../constants';
 import { useSettings } from '../context/SettingsContext';
 import { RootStackParamList } from '../types';
@@ -52,7 +53,7 @@ export default function PayoutSettingsScreen({ navigation, route }: Props) {
           onPress={() => navigation.goBack()}
           style={styles.closeButton}
         >
-          <Text style={styles.closeButtonText}>X</Text>
+          <X color="#b8c1d1" size={22} />
         </TouchableOpacity>
       </View>
       <Text style={styles.description}>
@@ -94,7 +95,6 @@ const styles = StyleSheet.create({
   kicker: { color: '#8db8ff', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
   title: { color: '#fff', fontSize: 25, fontWeight: '800', marginTop: 5 },
   closeButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  closeButtonText: { color: '#b8c1d1', fontSize: 20, fontWeight: '600' },
   description: { color: '#aaa', fontSize: 14, lineHeight: 20, marginBottom: 18 },
   networkSummary: { color: '#888', fontSize: 14, marginBottom: 18 },
   networkValue: { color: '#fff', fontSize: 14, fontWeight: '700' },
