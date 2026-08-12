@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Request } from 'express';
 import { type LinkedAccount, type User } from '@privy-io/node';
-import { database } from './client';
+import { database } from './client.js';
 import {
   remittances,
   remittanceWallets,
@@ -10,8 +10,8 @@ import {
   type RemittanceRow,
   type RemittanceWalletRow,
   type UserRow,
-} from './schema';
-import { getPrivyClient } from '../utils/privy';
+} from './schema.js';
+import { getPrivyClient } from '../utils/privy.js';
 
 export interface UserRecord {
   privyUserId: string;

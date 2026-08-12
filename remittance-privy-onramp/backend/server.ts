@@ -1,13 +1,12 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 /* eslint-disable import/first */
 import express from 'express';
 import cors from 'cors';
-import { STRIPE_SECRET_KEY } from './utils/stripeApiHelper';
-import authRoutes from './routes/auth';
-import onrampRoutes from './routes/onramp';
-import remittanceRoutes from './routes/remittances';
+import { STRIPE_SECRET_KEY } from './utils/stripeApiHelper.js';
+import authRoutes from './routes/auth.js';
+import onrampRoutes from './routes/onramp.js';
+import remittanceRoutes from './routes/remittances.js';
 /* eslint-enable import/first */
 
 if (!STRIPE_SECRET_KEY) {

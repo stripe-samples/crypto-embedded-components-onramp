@@ -1,6 +1,6 @@
 import fetch, { Response } from 'node-fetch';
-import { updateOAuthTokens, type UserRecord } from '../db/store';
-import { SERVICE_TIMEOUT_ERROR, QUOTE_EXPIRED_ERROR } from '../constants';
+import { updateOAuthTokens, type UserRecord } from '../db/store.js';
+import { SERVICE_TIMEOUT_ERROR, QUOTE_EXPIRED_ERROR } from '../constants.js';
 
 const RETRY_COUNT = 6;
 const RETRY_DELAY_MS = 3000;

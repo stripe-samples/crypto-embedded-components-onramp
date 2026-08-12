@@ -7,10 +7,10 @@ import {
   type PrivyWalletsService,
   type User,
 } from '@privy-io/node';
-import * as db from '../db/store';
-import { stripeCallWithRetry, toUserError } from '../utils/stripeApiHelper';
-import { errorMessage } from '../utils/errors';
-import { getPrivyClient } from '../utils/privy';
+import * as db from '../db/store.js';
+import { stripeCallWithRetry, toUserError } from '../utils/stripeApiHelper.js';
+import { errorMessage } from '../utils/errors.js';
+import { getPrivyClient } from '../utils/privy.js';
 
 const router = express.Router();
 
