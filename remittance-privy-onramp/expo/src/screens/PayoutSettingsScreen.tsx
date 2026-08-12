@@ -66,6 +66,7 @@ export default function PayoutSettingsScreen({ navigation, route }: Props) {
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
+        clearButtonMode="while-editing"
         onChangeText={value => {
           setDraftAddress(value);
           setShowAddressError(false);

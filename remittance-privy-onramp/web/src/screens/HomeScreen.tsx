@@ -126,6 +126,8 @@ export function HomeScreen({
                 autoCapitalize="none"
                 autoComplete="off"
                 autoCorrect="off"
+                data-1p-ignore="true"
+                name="payout-wallet-address"
                 onChange={(event) => {
                   setDraftAddress(event.target.value);
                   setShowAddressError(false);
