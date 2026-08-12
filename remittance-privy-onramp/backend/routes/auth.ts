@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import fetch from 'node-fetch';
-import * as db from '../db/store';
-import { LINK_API, STRIPE_SECRET_KEY, linkPost, type StripeApiData } from '../utils/stripeApiHelper';
-import { errorMessage } from '../utils/errors';
+import * as db from '../db/store.js';
+import { LINK_API, STRIPE_SECRET_KEY, linkPost, type StripeApiData } from '../utils/stripeApiHelper.js';
+import { errorMessage } from '../utils/errors.js';
 
 const router = express.Router();
 
