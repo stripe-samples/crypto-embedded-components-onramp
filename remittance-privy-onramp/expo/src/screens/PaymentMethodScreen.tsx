@@ -673,6 +673,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         sourceAmount: amount,
         sourceCurrency: 'usd',
         destinationCurrency: destCurrency,
+        payoutDestinationAddress: settings.payoutDestinationAddress,
       });
 
       if (!remittanceResult.success) {

@@ -335,6 +335,11 @@ export default function SuccessScreen({ navigation, route }: Props) {
           <>
             {walletAddress ? <Text style={styles.detailMono}>Wallet: {shorten(walletAddress)}</Text> : null}
             {remittance ? <Text style={styles.detailMono}>Remittance: {remittance.id}</Text> : null}
+            {remittance?.payoutDestinationAddress ? (
+              <Text style={styles.detailMono}>
+                Payout wallet: {shorten(remittance.payoutDestinationAddress)}
+              </Text>
+            ) : null}
             {remittance?.stripeStatus ? <Text style={styles.detailMono}>Stripe status: {remittance.stripeStatus}</Text> : null}
             {transactionId ? <Text style={styles.detailMono}>Transaction: {transactionId}</Text> : null}
             {remittance?.deliveryTransferHash ? (

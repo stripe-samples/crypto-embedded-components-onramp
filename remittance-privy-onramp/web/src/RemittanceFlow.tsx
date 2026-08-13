@@ -78,6 +78,16 @@ type EmbeddedWalletIdentity = {
   address: string;
 };
 
+const PAYOUT_DESTINATION_STORAGE_KEY = 'remittance_demo_payout_destination';
+
+function storedPayoutDestinationAddress() {
+  try {
+    return window.localStorage.getItem(PAYOUT_DESTINATION_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 function findEmbeddedWallet(
   user: PrivyUser | null | undefined,
   address?: string,
@@ -194,6 +204,9 @@ export default function RemittanceFlow() {
   const [kycStepUpFromTier, setKycStepUpFromTier] = useState<'l0' | 'l1' | 'l2'>('l0');
 
   const [transfer, setTransfer] = useState<TransferIntent>(DEFAULT_TRANSFER);
+  const [payoutDestinationAddress, setPayoutDestinationAddress] = useState(
+    storedPayoutDestinationAddress,
+  );
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletNetwork, setWalletNetwork] = useState(DEFAULT_DEMO_NETWORK);
   const [walletStage, setWalletStage] = useState<SetupStage>('idle');
@@ -228,6 +241,16 @@ export default function RemittanceFlow() {
   const updateTransfer = (updates: Partial<TransferIntent>) => {
     if (remittance || quote) resetCheckoutDraft();
     setTransfer((current) => ({ ...current, ...updates }));
+  };
+
+  const updatePayoutDestinationAddress = (address: string) => {
+    if (remittance || quote) resetCheckoutDraft();
+    setPayoutDestinationAddress(address);
+    try {
+      window.localStorage.setItem(PAYOUT_DESTINATION_STORAGE_KEY, address);
+    } catch {
+      // The setting remains available for the current browser session.
+    }
   };
 
   const updateKycForm = (updates: Partial<KycForm>) => {
@@ -627,6 +650,7 @@ export default function RemittanceFlow() {
         sourceAmount: amount,
         sourceCurrency: 'usd',
         destinationCurrency,
+        payoutDestinationAddress,
       });
       if (!created.success) throw new Error(created.error.message);
       setRemittance(created.data);
@@ -845,8 +869,10 @@ export default function RemittanceFlow() {
           {step === 'landing' ? (
             <HomeScreen
               onContinue={() => setStep('auth')}
+              onPayoutDestinationAddressChange={updatePayoutDestinationAddress}
               onPayoutModeChange={(payoutMode) => updateTransfer({ payoutMode })}
               onramp={onramp}
+              payoutDestinationAddress={payoutDestinationAddress}
               payoutMode={transfer.payoutMode}
               privyReady={privyReady}
               sdkError={sdkError}
@@ -907,6 +933,7 @@ export default function RemittanceFlow() {
               isHoldMode={isHoldMode}
               onContinue={() => setStep('payment')}
               onPrepare={() => void handlePrepareWallet()}
+              payoutDestinationAddress={payoutDestinationAddress}
               routeNetworkName={routeNetworkName}
               stage={walletStage}
               transfer={transfer}
@@ -951,6 +978,7 @@ export default function RemittanceFlow() {
               destinationCurrency={destinationCurrency}
               onCheckout={() => void handleCheckout()}
               paymentLabel={paymentLabel}
+              payoutDestinationAddress={payoutDestinationAddress}
               quote={quote}
               quoteLoading={quoteLoading}
               routeNetworkName={routeNetworkName}

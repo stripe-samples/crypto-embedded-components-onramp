@@ -1,22 +1,52 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Settings2 as SettingsIcon } from 'lucide-react-native';
 import { RootStackParamList } from '../types';
 import { DEFAULT_DEMO_NETWORK_NAME, MERCHANT_DISPLAY_NAME } from '../constants';
 import { PayoutMode, useTransfer } from '../context/TransferContext';
+import { useSettings } from '../context/SettingsContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
 };
 
+function isEvmAddress(value: string) {
+  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+}
+
 export default function HomeScreen({ navigation }: Props) {
   const { transfer, updateTransfer } = useTransfer();
+  const { settings } = useSettings();
 
   const setPayoutMode = (payoutMode: PayoutMode) => updateTransfer({ payoutMode });
 
+  const openSettings = (continueToAuth = false) => {
+    navigation.navigate('PayoutSettings', { continueToAuth });
+  };
+
+  const startTransfer = () => {
+    if (!isEvmAddress(settings.payoutDestinationAddress)) {
+      openSettings(true);
+      return;
+    }
+    navigation.navigate('Auth');
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.brand}>{MERCHANT_DISPLAY_NAME}</Text>
+      <View style={styles.landingToolbar}>
+        <Text style={styles.brand}>{MERCHANT_DISPLAY_NAME}</Text>
+        <TouchableOpacity onPress={() => openSettings()} style={styles.settingsButton}>
+          <SettingsIcon color="#b8c1d1" size={17} />
+          <Text style={styles.settingsButtonText}>Demo settings</Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.title}>Send money across borders</Text>
       <Text style={styles.subtitle}>
         A simplified remittance demo powered by Stripe Onramp, Privy wallets,
@@ -48,7 +78,7 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Auth')}>
+      <TouchableOpacity style={styles.button} onPress={startTransfer}>
         <Text style={styles.buttonText}>Start demo transfer</Text>
       </TouchableOpacity>
     </View>
@@ -90,7 +120,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
-  brand: { color: '#8db8ff', fontSize: 13, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12 },
+  landingToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  brand: { color: '#8db8ff', fontSize: 13, fontWeight: '800', textTransform: 'uppercase' },
+  settingsButton: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  settingsButtonText: { color: '#b8c1d1', fontSize: 13, fontWeight: '700' },
   title: { color: '#fff', fontSize: 40, fontWeight: '800', lineHeight: 46, marginBottom: 12 },
   subtitle: { color: '#aaa', fontSize: 16, lineHeight: 23, marginBottom: 28 },
   valueCard: {

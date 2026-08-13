@@ -110,6 +110,7 @@ export type RemittanceResponse = {
   status: RemittanceStatus;
   walletAddress: string;
   network: string;
+  payoutDestinationAddress: string;
   deliveryTransferHash?: string;
   transferHash?: string;
   error?: string;

@@ -29,6 +29,7 @@ import {
   PRIVY_WALLET_SIGNER_ID,
 } from '../constants';
 import { useTransfer } from '../context/TransferContext';
+import { useSettings } from '../context/SettingsContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Wallet'>;
@@ -72,9 +73,14 @@ function isDuplicateSignerError(err: unknown): boolean {
   return message.toLowerCase().includes('duplicate signer');
 }
 
+function truncateAddress(address: string): string {
+  return address.length > 12 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address;
+}
+
 export default function WalletScreen({ navigation, route }: Props) {
   const { authToken } = route.params;
   const { transfer } = useTransfer();
+  const { settings } = useSettings();
   const { user: privyUser } = usePrivy();
   const { wallets, create } = useEmbeddedEthereumWallet();
   const { addSigners } = useSigners();
@@ -178,6 +184,9 @@ export default function WalletScreen({ navigation, route }: Props) {
           </View>
         </View>
         <Text style={styles.summaryRoute}>Delivered through USDC on {routeNetworkName}</Text>
+        <Text style={styles.summaryPayout}>
+          Payout wallet {truncateAddress(settings.payoutDestinationAddress)}
+        </Text>
       </View>
 
       <View style={styles.consentPanel}>
@@ -232,6 +241,7 @@ const styles = StyleSheet.create({
   summaryRecipientName: { color: '#fff', fontSize: 15, fontWeight: '800' },
   summaryRecipientDetail: { color: '#888', fontSize: 12, marginTop: 3 },
   summaryRoute: { color: '#9dbfff', fontSize: 13, fontWeight: '700', marginTop: 14 },
+  summaryPayout: { color: '#888', fontSize: 12, marginTop: 7 },
   consentPanel: {
     backgroundColor: '#171717',
     borderWidth: 1,

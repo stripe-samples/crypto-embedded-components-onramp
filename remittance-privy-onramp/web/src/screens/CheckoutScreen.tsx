@@ -7,6 +7,7 @@ export function CheckoutScreen({
   destinationCurrency,
   onCheckout,
   paymentLabel,
+  payoutDestinationAddress,
   quote,
   quoteLoading,
   routeNetworkName,
@@ -17,6 +18,7 @@ export function CheckoutScreen({
   destinationCurrency: string;
   onCheckout: () => void;
   paymentLabel: string;
+  payoutDestinationAddress: string;
   quote: QuoteResponse['transaction_details'] | null;
   quoteLoading: boolean;
   routeNetworkName: string;
@@ -35,6 +37,7 @@ export function CheckoutScreen({
         <SummaryRow label="Destination" value={transfer.recipientDestination} />
         <SummaryRow label="Pay with" value={paymentLabel} />
         <SummaryRow label="Wallet" value={walletAddress ? shorten(walletAddress) : '--'} />
+        <SummaryRow label="Payout wallet" value={shorten(payoutDestinationAddress)} />
       </div>
       <div className="quote-card">
         <SummaryRow
