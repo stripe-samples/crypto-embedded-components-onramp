@@ -21,7 +21,7 @@ export interface UserRecord {
   refreshToken: string | null;
 }
 
-export interface UserWithMeta extends UserRecord {
+export interface AuthenticatedUser extends UserRecord {
   email: string;
 }
 
@@ -48,7 +48,6 @@ export interface RemittanceWalletRecord {
   walletAddress: string;
   network: string;
   privyWalletId: string;
-  offrampDestinationAddress: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,9 +61,8 @@ function getPrimaryEmail(user: User): string | null {
   return email ? email.toLowerCase() : null;
 }
 
-function toUserRecord(row: UserRow): UserWithMeta {
+function toUserRecord(row: UserRow): UserRecord {
   return {
-    email: row.email,
     privyUserId: row.privyUserId,
     cryptoCustomerId: row.cryptoCustomerId,
     linkAuthIntentId: row.linkAuthIntentId,
@@ -85,20 +83,20 @@ function toRemittanceRecord(row: RemittanceRow): RemittanceRecord {
   };
 }
 
-export async function createOrUpdatePrivyUser(email: string, privyUserId: string): Promise<UserWithMeta> {
-  const [row] = await database
+export async function createPrivyUserIfNeeded(privyUserId: string): Promise<UserRecord> {
+  const [inserted] = await database
     .insert(users)
-    .values({ privyUserId, email })
-    .onConflictDoUpdate({
-      target: users.privyUserId,
-      set: { email, updatedAt: new Date() },
-    })
+    .values({ privyUserId })
+    .onConflictDoNothing({ target: users.privyUserId })
     .returning();
 
-  return toUserRecord(row);
+  if (inserted) return toUserRecord(inserted);
+  const existing = await getRecord(privyUserId);
+  if (!existing) throw new Error('Failed to load Privy user record');
+  return existing;
 }
 
-export async function getUserFromRequest(req: Request): Promise<UserWithMeta | null> {
+export async function getUserFromRequest(req: Request): Promise<AuthenticatedUser | null> {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) return null;
 
@@ -109,10 +107,11 @@ export async function getUserFromRequest(req: Request): Promise<UserWithMeta | n
   if (!email) {
     throw new Error('Privy user must have a linked email account');
   }
-  return createOrUpdatePrivyUser(email, verified.user_id);
+  const record = await createPrivyUserIfNeeded(verified.user_id);
+  return { ...record, email };
 }
 
-export async function getRecord(privyUserId: string): Promise<UserWithMeta | undefined> {
+export async function getRecord(privyUserId: string): Promise<UserRecord | undefined> {
   const [row] = await database.select().from(users).where(eq(users.privyUserId, privyUserId)).limit(1);
   return row ? toUserRecord(row) : undefined;
 }
@@ -159,28 +158,36 @@ export async function updateOAuthTokens(
     .where(eq(users.privyUserId, privyUserId));
 }
 
-export async function upsertRemittanceWallet(
+export async function registerRemittanceWallet(
   input: Omit<RemittanceWalletRecord, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
 ): Promise<RemittanceWalletRecord> {
   const now = new Date();
   const id = input.id ?? `rw_${crypto.randomBytes(8).toString('hex')}`;
   const walletAddress = input.walletAddress.toLowerCase();
-  const [row] = await database
+  const [inserted] = await database
     .insert(remittanceWallets)
     .values({ ...input, id, walletAddress, updatedAt: now })
-    .onConflictDoUpdate({
-      target: remittanceWallets.ownerPrivyUserId,
-      set: {
-        walletAddress,
-        network: input.network,
-        privyWalletId: input.privyWalletId,
-        offrampDestinationAddress: input.offrampDestinationAddress,
-        updatedAt: now,
-      },
-    })
+    .onConflictDoNothing({ target: remittanceWallets.ownerPrivyUserId })
     .returning();
 
-  return toRemittanceWalletRecord(row);
+  if (inserted) return toRemittanceWalletRecord(inserted);
+
+  const [existing] = await database
+    .select()
+    .from(remittanceWallets)
+    .where(eq(remittanceWallets.ownerPrivyUserId, input.ownerPrivyUserId))
+    .limit(1);
+  if (!existing) throw new Error('Failed to load the registered remittance wallet');
+
+  if (
+    existing.walletAddress !== walletAddress ||
+    existing.network !== input.network ||
+    existing.privyWalletId !== input.privyWalletId
+  ) {
+    throw new Error('A different remittance wallet is already registered for this user');
+  }
+
+  return toRemittanceWalletRecord(existing);
 }
 
 export async function getRemittanceWallet(id: string): Promise<RemittanceWalletRecord | undefined> {

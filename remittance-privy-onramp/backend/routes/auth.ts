@@ -41,7 +41,7 @@ router.post('/create', async (req: Request, res: Response) => {
 
     await db.setLinkAuthIntent(user.privyUserId, data.id);
 
-    console.log(`[auth] created auth intent for ${user.email}: ${data.id}`);
+    console.log(`[auth] created auth intent: ${data.id}`);
     res.json({ authIntentId: data.id });
   } catch (err: unknown) {
     res.status(500).json({ error: errorMessage(err) });
@@ -78,7 +78,7 @@ router.post('/save_user', async (req: Request, res: Response) => {
         accessToken: tokenData.access_token,
         refreshToken: tokenData.refresh?.refresh_token ?? null,
       });
-      console.log(`[auth] stored OAuth tokens for ${user.email}`);
+      console.log('[auth] stored OAuth tokens');
     } else {
       console.warn('[auth] token exchange failed:', JSON.stringify(tokenData));
       return res.status(tokenRes.ok ? 502 : tokenRes.status).json({
@@ -86,7 +86,7 @@ router.post('/save_user', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[auth] saved customer ${crypto_customer_id} for ${user.email}`);
+    console.log(`[auth] saved customer ${crypto_customer_id}`);
     res.json({ success: true });
   } catch (err: unknown) {
     res.status(500).json({ error: errorMessage(err) });

@@ -214,11 +214,7 @@ router.post('/remittance_wallet', async (req: Request, res: Response) => {
         error: 'wallet_address, privy_user_id, and privy_wallet_id are required',
       });
     }
-    if (!REMITTANCE_OFFRAMP_DESTINATION_ADDRESS) {
-      throw new Error('REMITTANCE_OFFRAMP_DESTINATION_ADDRESS must be set in server/.env');
-    }
     assertEvmAddress(wallet_address, 'wallet address');
-    assertEvmAddress(REMITTANCE_OFFRAMP_DESTINATION_ADDRESS, 'offramp destination address');
     if (network && network !== REMITTANCE_ONRAMP_NETWORK) {
       return res.status(400).json({
         error: `Wallet network must match configured remittance network ${REMITTANCE_ONRAMP_NETWORK}`,
@@ -235,15 +231,14 @@ router.post('/remittance_wallet', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Privy wallet is not linked to the authenticated user' });
     }
 
-    const wallet = await db.upsertRemittanceWallet({
+    const wallet = await db.registerRemittanceWallet({
       ownerPrivyUserId: user.privyUserId,
       walletAddress: linkedWallet.address,
       network: REMITTANCE_ONRAMP_NETWORK,
       privyWalletId: privy_wallet_id,
-      offrampDestinationAddress: REMITTANCE_OFFRAMP_DESTINATION_ADDRESS,
     });
 
-    console.log(`[remittance_wallet] attached for ${user.email}: ${wallet.walletAddress}`);
+    console.log(`[remittance_wallet] attached: ${wallet.walletAddress}`);
     res.json(remittanceWalletToApi(wallet));
   } catch (err: unknown) {
     const message = errorMessage(err);
@@ -259,6 +254,10 @@ router.post('/remittances', async (req: Request, res: Response) => {
 
     const record = await db.getRecord(user.privyUserId);
     if (!record) return res.status(404).json({ error: 'User not found' });
+    if (!REMITTANCE_OFFRAMP_DESTINATION_ADDRESS) {
+      throw new Error('REMITTANCE_OFFRAMP_DESTINATION_ADDRESS must be set in backend/.env');
+    }
+    assertEvmAddress(REMITTANCE_OFFRAMP_DESTINATION_ADDRESS, 'offramp destination address');
 
     const {
       payment_token, source_amount, source_currency,
@@ -309,7 +308,7 @@ router.post('/remittances', async (req: Request, res: Response) => {
       walletAddress: remittanceWallet.walletAddress,
       network: remittanceWallet.network,
       privyWalletId: remittanceWallet.privyWalletId,
-      offrampDestinationAddress: remittanceWallet.offrampDestinationAddress,
+      offrampDestinationAddress: REMITTANCE_OFFRAMP_DESTINATION_ADDRESS,
     });
     console.log(`[remittance] created ${remittance.id} for onramp session ${data.id}`);
 
