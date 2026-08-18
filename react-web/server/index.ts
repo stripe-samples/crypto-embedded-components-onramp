@@ -3,12 +3,12 @@ import cors from "cors";
 import path from "path";
 import dotenv from "dotenv";
 import axios from "axios";
+import Stripe from "stripe";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const STRIPE_API_VERSION = "2025-03-31.preview";
 
 const getLivemode = (req: express.Request): boolean => {
   const value = req.body?.livemode ?? req.query?.livemode;
@@ -18,9 +18,6 @@ const getLivemode = (req: express.Request): boolean => {
     return false;
   }
 };
-
-const getBasicAuth = (secretKey: string) =>
-  `Basic ${Buffer.from(secretKey + ":").toString("base64")}`;
 
 app.use(cors());
 app.use(express.json());
@@ -40,6 +37,29 @@ const getApiKeys = (
   };
 };
 
+const stripeClients = new Map<boolean, Stripe>();
+
+const getStripeClient = (livemode: boolean): Stripe => {
+  let client = stripeClients.get(livemode);
+  if (!client) {
+    const { secretKey } = getApiKeys(livemode);
+    client = new Stripe(secretKey, {
+      apiVersion: `${Stripe.API_VERSION};crypto_onramp_beta=v2` as Stripe.LatestApiVersion,
+    });
+    stripeClients.set(livemode, client);
+  }
+  return client;
+};
+
+const requestOptions = (oauthToken: string): Stripe.RequestOptions => ({
+  headers: { "Stripe-OAuth-Token": oauthToken },
+});
+
+const statusCodeOf = (error: any): number => error?.statusCode ?? 500;
+const toUserError = (error: any): string => error?.message ?? String(error);
+
+// login.link.com isn't a Stripe API host, so it has no stripe-node bindings —
+// these calls stay on axios.
 app.post("/api/link_auth_intent", async (req, res) => {
   try {
     const { email } = req.body;
@@ -115,38 +135,30 @@ app.post("/api/crypto/onramp_sessions", async (req, res) => {
       return res.status(404).json({ error: "Access Token Not Found." });
     }
 
-    const response = await axios.post(
-      "https://api.stripe.com/v1/crypto/onramp_sessions",
-      new URLSearchParams({
+    const stripe = getStripeClient(getLivemode(req));
+    const session = await stripe.crypto.onrampSessions.create(
+      {
+        // crypto_customer_id, payment_token, wallet_address, and ui_mode aren't
+        // in this alpha SDK's typed params yet, so this cast mirrors the extra-param
+        // pattern the other server SDKs use for the same beta fields.
         ui_mode: "headless",
         crypto_customer_id: req.body.crypto_customer_id,
         payment_token: req.body.payment_token,
         source_currency: req.body.source_currency,
         destination_currency: req.body.destination_currency,
-        "destination_currencies[]": req.body.destination_currency,
+        destination_currencies: [req.body.destination_currency],
         source_amount: req.body.source_amount,
         wallet_address: req.body.wallet_address,
         destination_network: req.body.destination_network,
-        "destination_networks[]": req.body.destination_network,
+        destination_networks: [req.body.destination_network],
         customer_ip_address: req.ip || req.socket.remoteAddress || "",
-      }),
-      {
-        headers: {
-          Authorization: getBasicAuth(secretKey),
-          "Stripe-OAuth-Token": accessToken,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Stripe-Version": `${STRIPE_API_VERSION};crypto_onramp_beta=v2`,
-        },
-      },
+      } as any,
+      requestOptions(accessToken),
     );
-    res.json(response.data);
+    res.json(session);
   } catch (error: any) {
-    console.error(
-      "Error creating onramp session:",
-      error?.response?.data || error.message,
-    );
-    const status = error?.response?.status || 500;
-    res.status(status).json({ error: error?.response?.data || error.message });
+    console.error("Error creating onramp session:", error?.raw ?? error.message);
+    res.status(statusCodeOf(error)).json({ error: toUserError(error) });
   }
 });
 
@@ -160,55 +172,34 @@ app.post("/api/crypto/onramp_sessions/:sessionId/quote", async (req, res) => {
       return res.status(404).json({ error: "Access Token Not Found." });
     }
 
-    const response = await axios.post(
-      `https://api.stripe.com/v1/crypto/onramp_sessions/${sessionId}/quote`,
+    const stripe = getStripeClient(getLivemode(req));
+    const session = await stripe.crypto.onrampSessions.quote(
+      sessionId,
       {},
-      {
-        headers: {
-          Authorization: getBasicAuth(secretKey),
-          "Stripe-OAuth-Token": accessToken,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Stripe-Version": `${STRIPE_API_VERSION};crypto_onramp_beta=v2`,
-        },
-      },
+      requestOptions(accessToken),
     );
-    res.json(response.data);
+    res.json(session);
   } catch (error: any) {
     console.error(
       "Error refreshing onramp session quote:",
-      error?.response?.data || error.message,
+      error?.raw ?? error.message,
     );
-    const status = error?.response?.status || 500;
-    res.status(status).json({ error: error?.response?.data || error.message });
+    res.status(statusCodeOf(error)).json({ error: toUserError(error) });
   }
 });
 
 app.get("/api/crypto/onramp_sessions/:sessionId", async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { secretKey } = getApiKeys(getLivemode(req));
-    const response = await axios.get(
-      `https://api.stripe.com/v1/crypto/onramp_sessions/${sessionId}`,
-      {
-        headers: {
-          Authorization: getBasicAuth(secretKey),
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Stripe-Version": `${STRIPE_API_VERSION};crypto_onramp_beta=v2`,
-        },
-      },
-    );
-    const data = response.data;
+    const stripe = getStripeClient(getLivemode(req));
+    const session = await stripe.crypto.onrampSessions.retrieve(sessionId);
     res.json({
-      status: data.status,
-      transaction_id: data.transaction_details?.transaction_id ?? null,
+      status: session.status,
+      transaction_id: session.transaction_details?.transaction_id ?? null,
     });
   } catch (error: any) {
-    console.error(
-      "Error fetching onramp session:",
-      error?.response?.data || error.message,
-    );
-    const status = error?.response?.status || 500;
-    res.status(status).json({ error: error?.response?.data || error.message });
+    console.error("Error fetching onramp session:", error?.raw ?? error.message);
+    res.status(statusCodeOf(error)).json({ error: toUserError(error) });
   }
 });
 
@@ -224,35 +215,27 @@ app.post(
         return res.status(404).json({ error: "Access Token Not Found." });
       }
 
-      const body = new URLSearchParams({
-        "mandate_data[customer_acceptance][type]": "online",
-        "mandate_data[customer_acceptance][accepted_at]": String(Math.floor(Date.now() / 1000)),
-        "mandate_data[customer_acceptance][online][ip_address]": req.ip || req.socket.remoteAddress || "",
-        "mandate_data[customer_acceptance][online][user_agent]": req.headers["user-agent"] || "",
-      });
-
-      const response = await axios.post(
-        `https://api.stripe.com/v1/crypto/onramp_sessions/${sessionId}/checkout`,
-        body.toString(),
+      const stripe = getStripeClient(getLivemode(req));
+      const session = await stripe.crypto.onrampSessions.checkout(
+        sessionId,
         {
-          headers: {
-            Authorization: getBasicAuth(secretKey),
-            "Stripe-OAuth-Token": accessToken,
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Stripe-Version": `${STRIPE_API_VERSION};crypto_onramp_beta=v2`,
+          mandate_data: {
+            customer_acceptance: {
+              type: "online",
+              accepted_at: Math.floor(Date.now() / 1000),
+              online: {
+                ip_address: req.ip || req.socket.remoteAddress || "",
+                user_agent: req.headers["user-agent"] || "",
+              },
+            },
           },
         },
+        requestOptions(accessToken),
       );
-      res.json({ client_secret: response.data.client_secret });
+      res.json({ client_secret: session.client_secret });
     } catch (error: any) {
-      console.error(
-        "Error checking out onramp session:",
-        error?.response?.data || error.message,
-      );
-      const status = error?.response?.status || 500;
-      res
-        .status(status)
-        .json({ error: error?.response?.data || error.message });
+      console.error("Error checking out onramp session:", error?.raw ?? error.message);
+      res.status(statusCodeOf(error)).json({ error: toUserError(error) });
     }
   },
 );
@@ -270,18 +253,13 @@ app.get("/api/crypto/customers/:customerId", async (req, res) => {
       return res.status(404).json({ error: "Access Token Not Found." });
     }
 
-    const response = await axios.get(
-      `https://api.stripe.com/v1/crypto/customers/${customerId}`,
-      {
-        headers: {
-          Authorization: getBasicAuth(secretKey),
-          "Stripe-OAuth-Token": accessToken,
-          "Stripe-Feature": "identifier_type_lifecycle=v1",
-          "Stripe-Version": `${STRIPE_API_VERSION};crypto_onramp_beta=v2`,
-        },
-      },
+    const stripe = getStripeClient(getLivemode(req));
+    const data = await stripe.crypto.customers.retrieve(
+      customerId,
+      {},
+      requestOptions(accessToken),
     );
-    const data = response.data;
+
     const kycTiers: Array<{ tier: string; verification_status: string }> =
       data.kyc_tiers ?? [];
     const kycRegion = data.kyc_region ?? null;
@@ -322,12 +300,8 @@ app.get("/api/crypto/customers/:customerId", async (req, res) => {
       provided_fields: providedFields,
     });
   } catch (error: any) {
-    console.error(
-      "Error fetching crypto customer:",
-      error?.response?.data || error.message,
-    );
-    const status = error?.response?.status || 500;
-    res.status(status).json({ error: error?.response?.data || error.message });
+    console.error("Error fetching crypto customer:", error?.raw ?? error.message);
+    res.status(statusCodeOf(error)).json({ error: toUserError(error) });
   }
 });
 
@@ -342,28 +316,19 @@ app.get("/api/crypto/customers/:customerId/wallets", async (req, res) => {
       return res.status(404).json({ error: "Access Token Not Found." });
     }
 
-    const params = new URLSearchParams();
-    if (req.query.limit) params.append("limit", req.query.limit as string);
-    if (req.query.starting_after) params.append("starting_after", req.query.starting_after as string);
-    const qs = params.toString();
-
-    const response = await axios.get(
-      `https://api.stripe.com/v1/crypto/customers/${customerId}/crypto_consumer_wallets${qs ? `?${qs}` : ""}`,
+    const stripe = getStripeClient(getLivemode(req));
+    const data = await stripe.crypto.customers.listConsumerWallets(
+      customerId,
       {
-        headers: {
-          Authorization: getBasicAuth(secretKey),
-          "Stripe-OAuth-Token": accessToken,
-        },
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        starting_after: req.query.starting_after as string | undefined,
       },
+      requestOptions(accessToken),
     );
-    res.json(response.data);
+    res.json(data);
   } catch (error: any) {
-    console.error(
-      "Error fetching wallets:",
-      error?.response?.data || error.message,
-    );
-    const status = error?.response?.status || 500;
-    res.status(status).json({ error: error?.response?.data || error.message });
+    console.error("Error fetching wallets:", error?.raw ?? error.message);
+    res.status(statusCodeOf(error)).json({ error: toUserError(error) });
   }
 });
 
@@ -380,25 +345,16 @@ app.get(
         return res.status(404).json({ error: "Access Token Not Found." });
       }
 
-      const response = await axios.get(
-        `https://api.stripe.com/v1/crypto/customers/${customerId}/payment_tokens`,
-        {
-          headers: {
-            Authorization: getBasicAuth(secretKey),
-            "Stripe-OAuth-Token": accessToken,
-          },
-        },
+      const stripe = getStripeClient(getLivemode(req));
+      const data = await stripe.crypto.customers.listPaymentTokens(
+        customerId,
+        {},
+        requestOptions(accessToken),
       );
-      res.json(response.data);
+      res.json(data);
     } catch (error: any) {
-      console.error(
-        "Error fetching payment tokens:",
-        error?.response?.data || error.message,
-      );
-      const status = error?.response?.status || 500;
-      res
-        .status(status)
-        .json({ error: error?.response?.data || error.message });
+      console.error("Error fetching payment tokens:", error?.raw ?? error.message);
+      res.status(statusCodeOf(error)).json({ error: toUserError(error) });
     }
   },
 );
@@ -437,30 +393,21 @@ app.get("/api/crypto/onramp_transaction_limits", async (req, res) => {
       return res.status(404).json({ error: "Access Token Not Found." });
     }
 
-    const qs = new URLSearchParams();
     const { wallet_address, destination_network } = req.query as Record<string, string>;
-    if (wallet_address) qs.append("wallet_address", wallet_address);
-    if (destination_network) qs.append("destination_network", destination_network);
-    qs.append("customer_ip_address", req.ip || req.socket.remoteAddress || "127.0.0.1");
 
-    const response = await axios.get(
-      `https://api.stripe.com/v1/crypto/onramp_transaction_limits?${qs.toString()}`,
+    const stripe = getStripeClient(getLivemode(req));
+    const data = await stripe.crypto.onrampTransactionLimits.retrieve(
       {
-        headers: {
-          Authorization: getBasicAuth(secretKey),
-          "Stripe-OAuth-Token": accessToken,
-          "Stripe-Version": `${STRIPE_API_VERSION};crypto_onramp_beta=v2`,
-        },
+        wallet_address,
+        destination_network,
+        customer_ip_address: req.ip || req.socket.remoteAddress || "127.0.0.1",
       },
+      requestOptions(accessToken),
     );
-    res.json(response.data);
+    res.json(data);
   } catch (error: any) {
-    console.error(
-      "Error fetching transaction limits:",
-      error?.response?.data || error.message,
-    );
-    const status = error?.response?.status || 500;
-    res.status(status).json({ error: error?.response?.data || error.message });
+    console.error("Error fetching transaction limits:", error?.raw ?? error.message);
+    res.status(statusCodeOf(error)).json({ error: toUserError(error) });
   }
 });
 
