@@ -1,4 +1,4 @@
-import { ExternalLink, RefreshCcw } from 'lucide-react';
+import { ExternalLink, House, RefreshCcw } from 'lucide-react';
 import { PrimaryButton, SecondaryButton, Spinner } from '../components/ui';
 import { Tracker, type TrackerStep } from '../components/Tracker';
 import type { CreateRemittanceResponse, RemittanceResponse, TransferIntent } from '../types';
@@ -24,6 +24,7 @@ export function SuccessScreen({
   isHoldMode,
   isOnrampFulfilled,
   onPoll,
+  onBackToStart,
   onSend,
   onToggleDetails,
   remittance,
@@ -44,6 +45,7 @@ export function SuccessScreen({
   isHoldMode: boolean;
   isOnrampFulfilled: boolean;
   onPoll: () => void;
+  onBackToStart: () => void;
   onSend: () => void;
   onToggleDetails: () => void;
   remittance: CreateRemittanceResponse | RemittanceResponse | null;
@@ -114,6 +116,11 @@ export function SuccessScreen({
           {remittance?.error ? <code>Error: {remittance.error}</code> : null}
         </div>
       ) : null}
+      <div className="tracker-home-action">
+        <SecondaryButton onClick={onBackToStart}>
+          <House aria-hidden="true" size={18} /> Back to start
+        </SecondaryButton>
+      </div>
     </section>
   );
 }
