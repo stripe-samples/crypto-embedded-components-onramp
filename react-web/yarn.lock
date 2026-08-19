@@ -9419,7 +9419,7 @@ strip-json-comments@^3.1.1:
   resolved "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz"
   integrity sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==
 
-stripe@22.6.0-alpha.1:
+stripe@^22.6.0-alpha.1:
   version "22.6.0-alpha.1"
   resolved "https://registry.yarnpkg.com/stripe/-/stripe-22.6.0-alpha.1.tgz#4924e314e3ce7e3097411db8e739d3f11d38ab07"
   integrity sha512-7+VzENMMKsoleNWzDSfHoABhQDwKVXSgwCT19Dx8CC9ShEds3q1Qe3468TfE60KF3kg0JZ+HoAx7eG/hr70BQw==
