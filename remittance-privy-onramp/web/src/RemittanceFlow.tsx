@@ -856,6 +856,14 @@ export default function RemittanceFlow() {
     setStep(nextStage);
   };
 
+  const handleStartTransfer = () => {
+    resetCheckoutDraft();
+    setPaymentElement(null);
+    setPaymentToken(null);
+    setDetailsOpen(false);
+    setStep('auth');
+  };
+
   return (
     <>
       <AppShell
@@ -868,7 +876,7 @@ export default function RemittanceFlow() {
 
           {step === 'landing' ? (
             <HomeScreen
-              onContinue={() => setStep('auth')}
+              onContinue={handleStartTransfer}
               onPayoutDestinationAddressChange={updatePayoutDestinationAddress}
               onPayoutModeChange={(payoutMode) => updateTransfer({ payoutMode })}
               onramp={onramp}
@@ -995,6 +1003,7 @@ export default function RemittanceFlow() {
               detailsOpen={detailsOpen}
               isHoldMode={isHoldMode}
               isOnrampFulfilled={isOnrampFulfilled}
+              onBackToStart={() => setStep('landing')}
               onPoll={() => void pollRemittance(true)}
               onSend={() => void runTransfer(true)}
               onToggleDetails={() => setDetailsOpen((open) => !open)}

@@ -33,6 +33,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { useSettings } from '../context/SettingsContext';
+import { IS_STRIPE_TEST_MODE } from '../constants';
 import { parseDateOfBirth } from '../kycValidation';
 
 type Props = {
@@ -132,19 +133,20 @@ export default function KYCScreen({ navigation, route }: Props) {
       <Row label="First Name" value={form.firstName} onChange={set('firstName')} autoCapitalize="words" />
       <Row label="Last Name" value={form.lastName} onChange={set('lastName')} autoCapitalize="words" />
 
-      {/* Test mode hint */}
-      <View style={styles.testCard}>
-        <Text style={styles.testCardTitle}>Test mode</Text>
-        <Text style={styles.testCardBody}>
-          Use <Text style={styles.testCardCode}>Verified</Text> as the last name to pass L0 KYC in test mode.{' '}
-          <Text
-            style={styles.testCardLink}
-            onPress={() => Linking.openURL('https://docs.stripe.com/crypto/onramp/embedded-components-integration-guide?platform=react-native#test-values')}
-          >
-            See all test values →
+      {IS_STRIPE_TEST_MODE ? (
+        <View style={styles.testCard}>
+          <Text style={styles.testCardTitle}>Test mode</Text>
+          <Text style={styles.testCardBody}>
+            Use <Text style={styles.testCardCode}>Verified</Text> as the last name to pass L0 KYC in test mode.{' '}
+            <Text
+              style={styles.testCardLink}
+              onPress={() => Linking.openURL('https://docs.stripe.com/crypto/onramp/embedded-components-integration-guide?platform=react-native#test-values')}
+            >
+              See all test values →
+            </Text>
           </Text>
-        </Text>
-      </View>
+        </View>
+      ) : null}
 
       {/* SSN + DOB — L1 and L2 only */}
       {collectSensitiveFields && (

@@ -34,6 +34,8 @@ export function transactionExplorerUrl(network: string, hash: string): string | 
 
 export const DEFAULT_DEMO_NETWORK = process.env.EXPO_PUBLIC_ONRAMP_NETWORK ?? 'tempo';
 export const DEFAULT_DEMO_NETWORK_NAME = NETWORK_NAMES[DEFAULT_DEMO_NETWORK] ?? DEFAULT_DEMO_NETWORK;
+export const IS_STRIPE_TEST_MODE =
+  process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_test_') ?? false;
 export const PRIVY_WALLET_SIGNER_ID = process.env.EXPO_PUBLIC_PRIVY_WALLET_SIGNER_ID;
 export const PRIVY_WALLET_POLICY_IDS = (process.env.EXPO_PUBLIC_PRIVY_WALLET_POLICY_IDS ?? '')
   .split(',')

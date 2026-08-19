@@ -599,6 +599,15 @@ p {
   font-size: 12px;
 }
 
+.tracker-home-action {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.tracker-home-action .button {
+  width: 100%;
+}
+
 .transaction-link {
   display: flex;
   align-items: flex-start;

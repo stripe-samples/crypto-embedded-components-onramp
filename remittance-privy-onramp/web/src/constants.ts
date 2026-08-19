@@ -41,6 +41,7 @@ export const DEFAULT_TRANSFER = {
 
 export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 export const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+export const IS_STRIPE_TEST_MODE = STRIPE_PUBLISHABLE_KEY?.startsWith('pk_test_') ?? false;
 export const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID;
 export const PRIVY_CLIENT_ID = import.meta.env.VITE_PRIVY_CLIENT_ID;
 export const PRIVY_WALLET_SIGNER_ID = import.meta.env.VITE_PRIVY_WALLET_SIGNER_ID;

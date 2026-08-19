@@ -28,7 +28,7 @@ export function KYCStepUpScreen({
       <form className="form" onSubmit={onSubmit}>
         {fromTier === 'l0' ? (
           <>
-            <TextField label="Social Security Number" value={formatSsn(form.ssn)} onChange={(ssn) => onChange({ ssn: digitsOnly(ssn, 9) })} placeholder="000-00-0000" />
+            <TextField label="Social Security Number" value={formatSsn(form.ssn)} onChange={(ssn) => onChange({ ssn: digitsOnly(ssn, 9) })} placeholder="XXX-XX-XXXX" />
             <div className="date-grid">
               <TextField label="MM" value={form.dobMonth} onChange={(dobMonth) => onChange({ dobMonth: digitsOnly(dobMonth, 2) })} />
               <TextField label="DD" value={form.dobDay} onChange={(dobDay) => onChange({ dobDay: digitsOnly(dobDay, 2) })} />

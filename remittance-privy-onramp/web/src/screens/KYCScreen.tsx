@@ -1,4 +1,5 @@
 import { PrimaryButton, TextField, TierBadge } from '../components/ui';
+import { IS_STRIPE_TEST_MODE } from '../constants';
 import type { KycForm, KycTier } from '../types';
 import { digitsOnly, formatSsn } from '../utils';
 
@@ -20,18 +21,20 @@ export function KYCScreen({
       <p>{kycTier === 'L0' ? 'Enter your full name.' : 'Enter your name, SSN, and date of birth.'}</p>
       <div className="form">
         <TextField label="First name" value={form.firstName} onChange={(firstName) => onChange({ firstName })} placeholder="Alice" />
-        <TextField label="Last name" value={form.lastName} onChange={(lastName) => onChange({ lastName })} placeholder="Verified" />
-        <div className="test-card">
-          <strong>Test mode</strong>
-          <span>Use <code>Verified</code> as the last name to pass L0 KYC in test mode.</span>
-        </div>
+        <TextField label="Last name" value={form.lastName} onChange={(lastName) => onChange({ lastName })} placeholder="Garcia" />
+        {IS_STRIPE_TEST_MODE ? (
+          <div className="test-card">
+            <strong>Test mode</strong>
+            <span>Use <code>Verified</code> as the last name to pass L0 KYC in test mode.</span>
+          </div>
+        ) : null}
         {kycTier !== 'L0' ? (
           <>
             <TextField
               label="Social Security Number"
               value={formatSsn(form.ssn)}
               onChange={(ssn) => onChange({ ssn: digitsOnly(ssn, 9) })}
-              placeholder="000-00-0000"
+              placeholder="XXX-XX-XXXX"
             />
             <div className="date-grid">
               <TextField label="MM" value={form.dobMonth} onChange={(dobMonth) => onChange({ dobMonth: digitsOnly(dobMonth, 2) })} placeholder="01" />
