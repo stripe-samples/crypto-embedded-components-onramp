@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -29,7 +29,7 @@ import { Dayjs } from "dayjs";
 import type { KycInfo, CryptoNetwork, OnrampCoordinator, WalletOwnershipChallenge } from "@stripe/crypto";
 import { getTheme } from "./theme";
 import { LOCAL_LIMITS } from "./kycLimits";
-import { EXPLORER_URLS, getNetworks, isEuCountry, EU_COUNTRIES } from "./shared";
+import { EXPLORER_URLS, getNetworks, getCurrenciesForNetwork, isEuCountry, EU_COUNTRIES } from "./shared";
 import { EU_COUNTRY_NAMES } from "./euIdentifiers";
 import type { AccountStatus, KycLevel, KycRegion, Wallet, OnrampSession, CheckoutError } from "./types";
 import { EuKycStep } from "./EuKycStep";
@@ -274,6 +274,12 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   const [selectedAmt, setSelectedAmt] = useState<string | null>("1");
   const [customAmt, setCustomAmt] = useState("");
   const [destCurrency, setDestCurrency] = useState("usdc");
+  // Which destination currencies are valid depends on the selected wallet's
+  // network, so the picker's options are derived rather than hardcoded.
+  const destCurrencyOptions = useMemo(
+    () => getCurrenciesForNetwork(props.selectedWalletNetwork, props.livemode),
+    [props.selectedWalletNetwork, props.livemode],
+  );
   const [sourceCurrency, setSourceCurrency] = useState<'usd' | 'eur'>(props.kycRegion === 'eu' ? 'eur' : 'usd');
   const sourceCurrencySymbol = sourceCurrency === 'eur' ? '€' : '$';
   const [session, setSession] = useState<OnrampSession | null>(null);
@@ -495,6 +501,16 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
       .catch((e) => log("Transaction limits fetch failed", e?.message || String(e)))
       .finally(() => setLoadingLimits(false));
   }, [step, linkAuthIntentId, livemode, selectedWallet, selectedWalletNetwork, limitSource, log]);
+
+  // Reset the destination currency whenever it no longer applies to the selected
+  // wallet's network (wallet changed, livemode toggled) so a stale currency is
+  // never sent to the API.
+  useEffect(() => {
+    if (destCurrencyOptions.length === 0) return;
+    if (!destCurrencyOptions.includes(destCurrency)) {
+      setDestCurrency(destCurrencyOptions[0]);
+    }
+  }, [destCurrencyOptions, destCurrency]);
 
   // ─── Poll checkout ────────────────────────────────────
 
@@ -1740,13 +1756,25 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
             <TextField
               select
               label="Crypto"
-              value={destCurrency}
+              // Fall back to empty rather than a value with no matching option,
+              // which MUI warns about as out-of-range.
+              value={destCurrencyOptions.includes(destCurrency) ? destCurrency : ""}
               onChange={(e) => setDestCurrency(e.target.value)}
               size="small"
               fullWidth
+              disabled={destCurrencyOptions.length <= 1}
+              helperText={
+                destCurrencyOptions.length === 0
+                  ? `No destination currencies available for ${props.selectedWalletNetwork ?? "this network"}`
+                  : undefined
+              }
               sx={inputSx}
             >
-              <MenuItem value="usdc">USDC</MenuItem>
+              {destCurrencyOptions.map((currency) => (
+                <MenuItem key={currency} value={currency}>
+                  {currency.toUpperCase()}
+                </MenuItem>
+              ))}
             </TextField>
 
             <ToggleButtonGroup

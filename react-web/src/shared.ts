@@ -1,10 +1,42 @@
 import type { CryptoNetwork } from "@stripe/crypto";
 
-export const NETWORKS_LIVE: CryptoNetwork[] = ["solana", "base", "sui", "tempo", "celo" as CryptoNetwork];
-export const NETWORKS_TEST: CryptoNetwork[] = ["solana", "base"];
+/**
+ * A supported (network, destination currency) pair. This table is the single
+ * source of truth for both which networks a wallet can be registered on and
+ * which destination currencies can be bought onto that network, so the two can
+ * never drift apart.
+ */
+export type DestinationPair = [CryptoNetwork, string];
+
+export const DESTINATION_PAIRS_LIVE: DestinationPair[] = [
+  ["solana", "usdc"],
+  ["solana", "ripusd"],
+  ["base", "usdc"],
+  ["sui", "usdc"],
+  ["tempo", "usdc"],
+  ["celo" as CryptoNetwork, "usdc"],
+];
+
+// SUI and Tempo are not supported in Testnet since we use ZeroHash as an LP,
+// and ripusd is livemode-only.
+export const DESTINATION_PAIRS_TEST: DestinationPair[] = [
+  ["solana", "usdc"],
+  ["base", "usdc"],
+];
+
+export const getDestinationPairs = (livemode: boolean): DestinationPair[] =>
+  livemode ? DESTINATION_PAIRS_LIVE : DESTINATION_PAIRS_TEST;
 
 export const getNetworks = (livemode: boolean): CryptoNetwork[] =>
-  livemode ? NETWORKS_LIVE : NETWORKS_TEST;
+  Array.from(new Set(getDestinationPairs(livemode).map(([network]) => network)));
+
+export const getCurrenciesForNetwork = (
+  network: string | null | undefined,
+  livemode: boolean,
+): string[] =>
+  getDestinationPairs(livemode)
+    .filter(([n]) => n === network)
+    .map(([, currency]) => currency);
 
 export const EU_COUNTRIES = new Set([
   "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR",
