@@ -12,13 +12,14 @@ export const DESTINATION_PAIRS_LIVE: DestinationPair[] = [
   ["solana", "usdc"],
   ["solana", "ripusd"],
   ["base", "usdc"],
+  ["base", "ousd"],
   ["sui", "usdc"],
   ["tempo", "usdc"],
   ["celo" as CryptoNetwork, "usdc"],
 ];
 
 // SUI and Tempo are not supported in Testnet since we use ZeroHash as an LP,
-// and ripusd is livemode-only.
+// and ripusd/ousd are livemode-only.
 export const DESTINATION_PAIRS_TEST: DestinationPair[] = [
   ["solana", "usdc"],
   ["base", "usdc"],
