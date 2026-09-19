@@ -3,7 +3,7 @@
  *
  * The user manually picks their country of residence here. That choice determines
  * which KYC flow they enter:
- *   - US  → KYCScreen  (name / SSN / DOB → AddressScreen)
+ *   - US / CA / CO / PH → KYCScreen (country-specific ID → AddressScreen)
  *   - EU  → EuKycScreen (Basic Info → Identifiers → Attestation → Verify Docs)
  *
  * No API calls are made here.
@@ -17,20 +17,18 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { useSettings } from '../context/SettingsContext';
-import { EU_COUNTRY_NAMES, EU_COUNTRIES } from '../euIdentifiers';
+import {
+  COUNTRY_NAMES,
+  COUNTRY_OPTIONS,
+  countryFlag,
+  getNonEuKycCountry,
+  isEuKycCountry,
+  isNonEuKycCountry,
+} from '../kycCountries';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'KYCPrimer'>;
   route: RouteProp<RootStackParamList, 'KYCPrimer'>;
-};
-
-const REQUIREMENTS_BY_TIER = {
-  L0: ['Full name', 'Home address'],
-  L1: ['Full name', 'Social Security Number', 'Date of birth', 'Home address'],
-  L2: [
-    'Full name', 'Social Security Number', 'Date of birth',
-    'Home address', 'Government-issued photo ID', 'Selfie',
-  ],
 };
 
 const EU_REQUIREMENTS = [
@@ -43,14 +41,6 @@ const EU_REQUIREMENTS = [
   'Government-issued photo ID + selfie',
 ];
 
-// All selectable countries: US first, then EU alphabetically.
-const COUNTRY_OPTIONS: { code: string; label: string }[] = [
-  { code: 'US', label: 'United States' },
-  ...Object.entries(EU_COUNTRY_NAMES)
-    .sort((a, b) => a[1].localeCompare(b[1]))
-    .map(([code, name]) => ({ code, label: name })),
-];
-
 export default function KYCPrimerScreen({ navigation, route }: Props) {
   const { customerId, authToken, registrationCountry } = route.params;
   const { settings } = useSettings();
@@ -59,30 +49,45 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
   const [country, setCountry] = useState(registrationCountry ?? '');
   const [showPicker, setShowPicker] = useState(false);
 
-  const isEu = EU_COUNTRIES.has(country);
+  const isEu = isEuKycCountry(country);
+  const nonEuConfig = isNonEuKycCountry(country) ? getNonEuKycCountry(country) : null;
+  const effectiveTier = nonEuConfig && settings.kycTier === 'L0' && country !== 'US'
+    ? 'L1'
+    : settings.kycTier;
   const requirements = country
     ? isEu
       ? EU_REQUIREMENTS
-      : REQUIREMENTS_BY_TIER[settings.kycTier]
+      : nonEuConfig
+        ? [
+            'Full name',
+            ...(effectiveTier !== 'L0'
+              ? [nonEuConfig.nationalId.label, 'Date of birth']
+              : []),
+            'Home address',
+            ...(effectiveTier === 'L2'
+              ? ['Government-issued photo ID', 'Selfie']
+              : []),
+          ]
+        : null
     : null;
 
   const handleContinue = () => {
     if (isEu) {
       navigation.navigate('EuKyc', { customerId, authToken, country });
-    } else {
-      navigation.navigate('KYC', { customerId, authToken });
+    } else if (isNonEuKycCountry(country)) {
+      navigation.navigate('KYC', { customerId, authToken, country });
     }
   };
 
   const selectedLabel = country
-    ? `${EU_COUNTRY_NAMES[country] ?? 'United States'} (${country})`
+    ? `${countryFlag(country)} ${COUNTRY_NAMES[country] ?? country} (${country})`
     : 'Select your country of residence';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {country ? (
         <Text style={[styles.badge, isEu && styles.badgeEu]}>
-          {isEu ? 'EU' : 'US'}
+          {isEu ? 'EU' : country}
         </Text>
       ) : null}
 
@@ -124,7 +129,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
               }}
             >
               <Text style={[styles.pickerItemText, country === opt.code && styles.pickerItemTextSelected]}>
-                {opt.label} ({opt.code})
+                {opt.flag} {opt.label} ({opt.code})
               </Text>
             </TouchableOpacity>
           ))}
@@ -142,6 +147,14 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
             </View>
           )}
 
+          {nonEuConfig && country !== 'US' && settings.kycTier === 'L0' && (
+            <View style={styles.noteBanner}>
+              <Text style={styles.noteText}>
+                {nonEuConfig.name} requires identity information, so this flow collects L1 even when the demo is configured for L0.
+              </Text>
+            </View>
+          )}
+
           <Text style={styles.requiredLabel}>{"What's required:"}</Text>
           {requirements.map(item => (
             <View key={item} style={styles.bulletRow}>
@@ -150,10 +163,10 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
             </View>
           ))}
 
-          {!isEu && settings.kycTier === 'L2' && (
+          {!isEu && effectiveTier === 'L2' && (
             <View style={styles.noteBanner}>
               <Text style={styles.noteText}>
-                The ID and selfie are captured via Stripe's built-in secure verification flow.
+                The ID and selfie are captured via Stripe&apos;s built-in secure verification flow.
               </Text>
             </View>
           )}

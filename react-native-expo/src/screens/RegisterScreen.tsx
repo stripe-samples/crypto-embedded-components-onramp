@@ -9,7 +9,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { createAuthIntent, saveUser, getCryptoCustomer } from '../api/client';
-import { EU_COUNTRY_NAMES } from '../euIdentifiers';
+import {
+  COUNTRY_OPTIONS,
+  getNonEuKycCountry,
+  isNonEuKycCountry,
+} from '../kycCountries';
 
 
 type Props = {
@@ -17,15 +21,10 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Register'>;
 };
 
-const countryFlag = (code: string) =>
-  [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
-
-const COUNTRIES = [
-  { code: 'US', label: `${countryFlag('US')} US` },
-  ...Object.entries(EU_COUNTRY_NAMES)
-    .sort(([, a], [, b]) => a.localeCompare(b))
-    .map(([code]) => ({ code, label: `${countryFlag(code)} ${code}` })),
-];
+const COUNTRIES = COUNTRY_OPTIONS.map(({ code, label, flag }) => ({
+  code,
+  label: `${flag} ${label}`,
+}));
 
 export default function RegisterScreen({ navigation, route }: Props) {
   const { email, authToken: initialToken } = route.params;
@@ -34,8 +33,25 @@ export default function RegisterScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false);
   const { registerLinkUser, authorize } = useOnramp();
 
+  const handleCountrySelect = (nextCountry: string) => {
+    const previousCallingCode = isNonEuKycCountry(country)
+      ? getNonEuKycCountry(country).callingCode
+      : null;
+    const nextCallingCode = isNonEuKycCountry(nextCountry)
+      ? getNonEuKycCountry(nextCountry).callingCode
+      : null;
+
+    setCountry(nextCountry);
+    if (nextCallingCode && (!phone.trim() || phone === previousCallingCode || phone === '+1')) {
+      setPhone(nextCallingCode);
+    }
+  };
+
   const handleRegister = async () => {
-    if (!phone.trim() || phone === '+1') {
+    const callingCode = isNonEuKycCountry(country)
+      ? getNonEuKycCountry(country).callingCode
+      : '+1';
+    if (!phone.trim() || phone === callingCode) {
       Alert.alert('Error', 'Please enter your phone number.');
       return;
     }
@@ -68,8 +84,12 @@ export default function RegisterScreen({ navigation, route }: Props) {
 
       const customerRes = await getCryptoCustomer(authResult.customerId, authToken);
       const kyc_level = customerRes.success ? customerRes.data.kyc_level : null;
-
-      if (kyc_level === 'L0' || kyc_level === 'L1' || kyc_level === 'L2' || kyc_level === 'PENDING') {
+      if (
+        (kyc_level === 'L0' && country === 'US') ||
+        kyc_level === 'L1' ||
+        kyc_level === 'L2' ||
+        kyc_level === 'PENDING'
+      ) {
         navigation.navigate('Wallet', { customerId: authResult.customerId, authToken });
       } else {
         navigation.navigate('KYCPrimer', {
@@ -116,7 +136,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
           <TouchableOpacity
             key={c.code}
             style={[styles.chip, country === c.code && styles.chipSelected]}
-            onPress={() => setCountry(c.code)}
+            onPress={() => handleCountrySelect(c.code)}
           >
             <Text style={[styles.chipText, country === c.code && styles.chipTextSelected]}>
               {c.label}

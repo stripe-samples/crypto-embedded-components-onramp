@@ -1,3 +1,5 @@
+import type { NonEuKycCountry } from './kycCountries';
+
 export interface Verification {
   name: 'phone_verified' | 'kyc_verified' | 'id_document_verified';
   status: 'not_started' | 'pending' | 'rejected' | 'verified';
@@ -38,14 +40,15 @@ export type RootStackParamList = {
   Auth: undefined;
   Register: { email: string; authToken: string };
   KYCPrimer: { customerId: string; authToken: string; registrationCountry?: string };
-  KYC: { customerId: string; authToken: string };
+  KYC: { customerId: string; authToken: string; country: NonEuKycCountry };
   EuKyc: { customerId: string; authToken: string; country?: string };
   Address: {
     customerId: string;
     authToken: string;
     firstName: string;
     lastName: string;
-    /** Present for L1/L2 only — L0 skips SSN collection. */
+    country: NonEuKycCountry;
+    /** Present for L1/L2 only — L0 skips national-ID collection. */
     idNumber?: string;
     /** Present for L1/L2 only — L0 skips DOB collection. */
     dobDay?: number;
