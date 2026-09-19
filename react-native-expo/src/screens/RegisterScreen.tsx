@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView, Linking, View,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ActivityIndicator, Alert, ScrollView, Linking, Modal, FlatList,
 } from 'react-native';
 import { MERCHANT_DISPLAY_NAME } from '../constants';
 import { useOnramp } from '../hooks/useOnramp';
@@ -9,6 +9,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { createAuthIntent, saveUser, getCryptoCustomer } from '../api/client';
+import { useSettings } from '../context/SettingsContext';
 import { EU_COUNTRY_NAMES } from '../euIdentifiers';
 
 
@@ -17,26 +18,26 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Register'>;
 };
 
-const countryFlag = (code: string) =>
-  [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
-
-const COUNTRIES = [
-  { code: 'US', label: `${countryFlag('US')} US` },
-  ...Object.entries(EU_COUNTRY_NAMES)
-    .sort(([, a], [, b]) => a.localeCompare(b))
-    .map(([code]) => ({ code, label: `${countryFlag(code)} ${code}` })),
-];
+const EU_COUNTRY_LIST = Object.entries(EU_COUNTRY_NAMES)
+  .sort(([, a], [, b]) => a.localeCompare(b))
+  .map(([code]) => code);
 
 export default function RegisterScreen({ navigation, route }: Props) {
   const { email, authToken: initialToken } = route.params;
-  const [phone, setPhone] = useState('+1');
-  const [country, setCountry] = useState('US');
+  const { settings } = useSettings();
+  const [phone, setPhone] = useState(settings.kycRegion === 'eu' ? '+' : '+1');
+  const [country, setCountry] = useState(settings.kycRegion === 'eu' ? '' : 'US');
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const { registerLinkUser, authorize } = useOnramp();
 
   const handleRegister = async () => {
-    if (!phone.trim() || phone === '+1') {
+    if (!phone.trim() || phone === '+1' || phone === '+') {
       Alert.alert('Error', 'Please enter your phone number.');
+      return;
+    }
+    if (!country) {
+      Alert.alert('Error', 'Please select your country.');
       return;
     }
     setLoading(true);
@@ -99,31 +100,30 @@ export default function RegisterScreen({ navigation, route }: Props) {
       <Text style={styles.label}>Email address</Text>
       <TextInput style={[styles.input, styles.inputDisabled]} value={email} editable={false} />
 
+      <Text style={styles.label}>Country</Text>
+      {settings.kycRegion === 'us' ? (
+        <TextInput style={[styles.input, styles.inputDisabled]} value="United States" editable={false} />
+      ) : (
+        <TouchableOpacity
+          style={[styles.input, styles.countryPicker]}
+          onPress={() => setShowCountryPicker(true)}
+        >
+          <Text style={country ? styles.countryPickerText : styles.countryPickerPlaceholder}>
+            {country ? `${EU_COUNTRY_NAMES[country]} (${country})` : 'Select country'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       <Text style={styles.label}>Phone number</Text>
       <TextInput
         style={styles.input}
         value={phone}
         onChangeText={setPhone}
-        placeholder="+12125551234"
+        placeholder={settings.kycRegion === 'eu' ? '+491234567890' : '+12125551234'}
         placeholderTextColor="#555"
         keyboardType="phone-pad"
         autoCapitalize="none"
       />
-
-      <Text style={styles.label}>Country</Text>
-      <View style={styles.chipRow}>
-        {COUNTRIES.map(c => (
-          <TouchableOpacity
-            key={c.code}
-            style={[styles.chip, country === c.code && styles.chipSelected]}
-            onPress={() => setCountry(c.code)}
-          >
-            <Text style={[styles.chipText, country === c.code && styles.chipTextSelected]}>
-              {c.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
 
       <TouchableOpacity
         style={[styles.button, loading && styles.buttonDisabled]}
@@ -144,6 +144,32 @@ export default function RegisterScreen({ navigation, route }: Props) {
         </Text>
         .
       </Text>
+
+      <Modal visible={showCountryPicker} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Country</Text>
+              <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+                <Text style={styles.modalClose}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={EU_COUNTRY_LIST}
+              keyExtractor={item => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.countryRow}
+                  onPress={() => { setCountry(item); setShowCountryPicker(false); }}
+                >
+                  <Text style={styles.countryCode}>{item}</Text>
+                  <Text style={styles.countryName}>{EU_COUNTRY_NAMES[item]}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -166,21 +192,23 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   inputDisabled: { opacity: 0.5 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#333',
-    backgroundColor: '#1a1a1a',
+  countryPicker: { justifyContent: 'center' },
+  countryPickerText: { color: '#fff', fontSize: 16 },
+  countryPickerPlaceholder: { color: '#555', fontSize: 16 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '60%' },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#333',
   },
-  chipSelected: {
-    borderColor: '#635BFF',
-    backgroundColor: '#1a1a2e',
+  modalTitle: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  modalClose: { color: '#635BFF', fontSize: 16, fontWeight: '600' },
+  countryRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#2a2a2a',
   },
-  chipText: { color: '#aaa', fontSize: 14, fontWeight: '600' },
-  chipTextSelected: { color: '#635BFF' },
+  countryCode: { color: '#635BFF', fontSize: 16, fontWeight: '700', width: 32 },
+  countryName: { color: '#fff', fontSize: 15, marginLeft: 8 },
   button: {
     backgroundColor: '#635BFF',
     paddingVertical: 16,

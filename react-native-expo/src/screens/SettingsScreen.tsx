@@ -29,7 +29,7 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
-import { useSettings, KycTier } from '../context/SettingsContext';
+import { useSettings, KycTier, KycRegion } from '../context/SettingsContext';
 import { LOCAL_LIMITS } from '../kycLimits';
 
 type Props = {
@@ -86,6 +86,14 @@ const KYC_TIERS: {
 export default function SettingsScreen({ navigation: _navigation }: Props) {
   const { settings, updateSettings } = useSettings();
 
+  const setKycRegion = (region: KycRegion) => {
+    if (region === 'eu') {
+      updateSettings({ kycRegion: region, kycTier: 'L2' });
+    } else {
+      updateSettings({ kycRegion: region });
+    }
+  };
+
   const setKycTier = (tier: KycTier) => updateSettings({ kycTier: tier });
 
   const toggleLimitSource = () =>
@@ -97,24 +105,72 @@ export default function SettingsScreen({ navigation: _navigation }: Props) {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
       {/* ------------------------------------------------------------------ */}
+      {/* KYC Region section */}
+      {/* ------------------------------------------------------------------ */}
+      <Text style={styles.sectionTitle}>KYC Region</Text>
+      <Text style={styles.sectionSubtitle}>
+        Select the regulatory region for identity verification. EU requires
+        additional identifiers and mandatory L2 verification.
+      </Text>
+
+      <View style={styles.regionRow}>
+        <TouchableOpacity
+          style={[styles.regionCard, settings.kycRegion === 'us' && styles.regionCardSelected]}
+          onPress={() => setKycRegion('us')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.tierHeader}>
+            <View style={[styles.radio, settings.kycRegion === 'us' && styles.radioSelected]} />
+            <Text style={[styles.tierTitle, settings.kycRegion === 'us' && styles.tierTitleActive]}>US</Text>
+          </View>
+          <Text style={styles.regionDesc}>Standard US flow: SSN, state/ZIP, L0/L1/L2 tiers</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.regionCard, settings.kycRegion === 'eu' && styles.regionCardSelected]}
+          onPress={() => setKycRegion('eu')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.tierHeader}>
+            <View style={[styles.radio, settings.kycRegion === 'eu' && styles.radioSelected]} />
+            <Text style={[styles.tierTitle, settings.kycRegion === 'eu' && styles.tierTitleActive]}>EU</Text>
+          </View>
+          <Text style={styles.regionDesc}>EU flow: nationalities, MiCA identifiers, terms of service, mandatory L2</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ------------------------------------------------------------------ */}
       {/* KYC Tier section */}
       {/* ------------------------------------------------------------------ */}
-      <Text style={styles.sectionTitle}>KYC Tier</Text>
+      <Text style={[styles.sectionTitle, { marginTop: 36 }]}>KYC Tier</Text>
       <Text style={styles.sectionSubtitle}>
         Select which identity-verification steps are collected when the user
         first signs in. Choose L0 to experience the step-up flow when a
         transaction exceeds the L0 limit.
       </Text>
 
+      {settings.kycRegion === 'eu' && (
+        <View style={styles.euTierNote}>
+          <Text style={styles.euTierNoteText}>
+            KYC tier is always L2 for EU users
+          </Text>
+        </View>
+      )}
+
       {KYC_TIERS.map(tier => {
         const selected = settings.kycTier === tier.value;
         const limits = LOCAL_LIMITS[tier.value];
+        const disabled = settings.kycRegion === 'eu';
         return (
           <TouchableOpacity
             key={tier.value}
-            style={[styles.tierCard, selected && styles.tierCardSelected]}
-            onPress={() => setKycTier(tier.value)}
-            activeOpacity={0.7}
+            style={[
+              styles.tierCard,
+              selected && styles.tierCardSelected,
+              disabled && styles.tierCardDisabled,
+            ]}
+            onPress={() => !disabled && setKycTier(tier.value)}
+            activeOpacity={disabled ? 1 : 0.7}
           >
             {/* Header row */}
             <View style={styles.tierHeader}>
@@ -215,7 +271,7 @@ export default function SettingsScreen({ navigation: _navigation }: Props) {
           <Text style={styles.infoTitle}>API endpoint</Text>
           <Text style={styles.infoCode}>GET /v1/crypto/onramp_transaction_limits</Text>
           <Text style={styles.infoDesc}>
-            The backend calls this endpoint with the customer's OAuth token and
+            {"The backend calls this endpoint with the customer's OAuth token and"}
             returns{' '}
             <Text style={styles.mono}>minimum_amounts</Text>,{' '}
             <Text style={styles.mono}>maximum_amounts</Text>, and{' '}
@@ -288,6 +344,30 @@ const styles = StyleSheet.create({
   sectionSubtitle: { color: '#666', fontSize: 13, lineHeight: 19, marginBottom: 16 },
   mono: { fontFamily: 'monospace', color: '#888' },
 
+  // Region cards
+  regionRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  regionCard: {
+    flex: 1,
+    backgroundColor: '#131313',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#252525',
+  },
+  regionCardSelected: { borderColor: '#635BFF' },
+  regionDesc: { color: '#555', fontSize: 12, lineHeight: 16, marginLeft: 28, marginTop: 4 },
+
+  // EU tier note
+  euTierNote: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a4a',
+  },
+  euTierNoteText: { color: '#635BFF', fontSize: 13, fontWeight: '600' },
+
   // Tier card
   tierCard: {
     backgroundColor: '#131313',
@@ -298,6 +378,7 @@ const styles = StyleSheet.create({
     borderColor: '#252525',
   },
   tierCardSelected: { borderColor: '#635BFF' },
+  tierCardDisabled: { opacity: 0.4 },
   tierHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   radio: {
     width: 18,

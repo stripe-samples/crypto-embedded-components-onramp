@@ -176,6 +176,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 
   const { collectPaymentMethod, createCryptoPaymentToken, getWalletOwnershipChallenge, submitWalletOwnershipSignature } = useOnramp();
   const { settings } = useSettings();
+  const sourceCurrency = settings.kycRegion === 'eu' ? 'eur' : 'usd';
 
   // Wallet ownership verification state — triggered when session creation or
   // checkout returns wallet_ownership_verification_required.
@@ -314,7 +315,8 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
             destinationNetwork: network,
           });
           if (result.success) {
-            const cardLimits = result.data.limits?.['usd.fiat']?.card ?? [];
+            const fiatKey = sourceCurrency === 'eur' ? 'eur.fiat' : 'usd.fiat';
+            const cardLimits = result.data.limits?.[fiatKey]?.card ?? [];
             const instantEntry =
               cardLimits.find(l => l.settlement_speed === 'instant') ?? cardLimits[0];
             // API returns the limit in cents — convert to dollars for display
@@ -812,7 +814,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
             <View style={styles.limitsRow}>
               <Text style={styles.limitsLabel}>Card limit (instant)</Text>
               <Text style={[styles.limitsValue, exceedsLimit && styles.limitsValueWarning]}>
-                ${limits.limit.toFixed(2)}
+                {sourceCurrency === 'eur' ? '€' : '$'}{limits.limit.toFixed(2)}
               </Text>
             </View>
 

@@ -51,6 +51,11 @@ router.post('/create', async (req: Request, res: Response) => {
       return res.status(400).json({ error: data.error.message });
     }
 
+    if (!data.id) {
+      console.error('[link] create auth intent returned no id:', JSON.stringify(data));
+      return res.status(500).json({ error: 'Link API did not return an auth intent ID' });
+    }
+
     if (record) record.linkAuthIntentId = data.id;
 
     console.log(`[auth] created auth intent for ${user.email}: ${data.id}`);

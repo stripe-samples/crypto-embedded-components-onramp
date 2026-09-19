@@ -73,6 +73,7 @@ In `app.json`, update the bundle identifier and package name to match your app:
 
 - `expo.ios.bundleIdentifier` — your iOS App ID.
 - `expo.android.package` — your Android app’s application ID.
+- `expo.ios.entitlements["com.apple.developer.devicecheck.appattest-environment"]` — must be `production` for live/TestFlight testing. Change to `development` only for simulator-only work.
 
 In `src/constants.ts`, update `MERCHANT_DISPLAY_NAME` to your app's display name.
 

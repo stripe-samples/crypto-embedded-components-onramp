@@ -63,11 +63,22 @@ export type KycTier = 'L0' | 'L1' | 'L2';
  */
 export type LimitSource = 'api' | 'local';
 
+/**
+ * KYC region the user wants to experience in the demo.
+ *
+ *   'us' — Standard US flow: SSN, state/ZIP address, L0/L1/L2 tiers.
+ *
+ *   'eu' — EU flow: nationalities, MiCA identifiers,
+ *          terms of service, mandatory L2 document verification.
+ */
+export type KycRegion = 'us' | 'eu';
+
 export interface AppSettings {
   kycTier: KycTier;
   limitSource: LimitSource;
   /** When false, skip the proactive wallet ownership challenge for EU wallets. */
   walletOwnershipVerification: boolean;
+  kycRegion: KycRegion;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +89,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   kycTier: 'L1',
   limitSource: 'local',
   walletOwnershipVerification: true,
+  kycRegion: 'us',
 };
 
 const STORAGE_KEY = '@crypto_onramp_settings_v1';
