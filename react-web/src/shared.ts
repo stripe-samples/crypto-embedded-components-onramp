@@ -11,15 +11,17 @@ export type DestinationPair = [CryptoNetwork, string];
 export const DESTINATION_PAIRS_LIVE: DestinationPair[] = [
   ["solana", "usdc"],
   ["solana", "ripusd"],
+  ["solana", "ousd"],
   ["base", "usdc"],
   ["base", "ousd"],
+  ["ethereum", "ousd"],
   ["sui", "usdc"],
   ["tempo", "usdc"],
+  ["tempo", "ousd"],
   ["celo" as CryptoNetwork, "usdc"],
 ];
 
-// SUI and Tempo are not supported in Testnet since we use ZeroHash as an LP,
-// and ripusd/ousd are livemode-only.
+// SUI and Tempo are not supported in Testnet since we use ZeroHash as an LP.
 export const DESTINATION_PAIRS_TEST: DestinationPair[] = [
   ["solana", "usdc"],
   ["base", "usdc"],
@@ -55,6 +57,7 @@ export const EXPLORER_URLS: Record<
   live: {
     solana: (txId) => `https://solscan.io/tx/${txId}`,
     base: (txId) => `https://basescan.org/tx/${txId}`,
+    ethereum: (txId) => `https://etherscan.io/tx/${txId}`,
     sui: (txId) => `https://suiscan.xyz/mainnet/tx/${txId}`,
     tempo: (txId) => `https://explore.tempo.xyz/tx/${txId}`,
     celo: (txId) => `https://celoscan.io/tx/${txId}`,
