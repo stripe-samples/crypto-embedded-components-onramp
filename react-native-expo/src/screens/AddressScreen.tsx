@@ -4,7 +4,7 @@
  * Recommended operations at this step:
  *   - Collect home address (line1, city, state, postalCode).
  *   - Call attachKycInfo({ firstName, lastName, address }) for L0.
- *     L1/L2: also include idType, idNumber, and dateOfBirth from KYCScreen.
+ *     L1/L2: also include idNumber and dateOfBirth collected in KYCScreen.
  *   - L2 only: call verifyIdentity() after attachKycInfo to capture a
  *     government-issued ID document and selfie via Stripe's built-in UI.
  *
