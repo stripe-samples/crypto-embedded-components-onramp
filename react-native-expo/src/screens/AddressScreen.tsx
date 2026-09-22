@@ -74,7 +74,7 @@ export default function AddressScreen({ navigation, route }: Props) {
     setSubmitting(true);
     try {
       // Build the KYC payload with only the fields that were collected.
-      // L0 skips national ID and DOB (idNumber/dob* are undefined in route params),
+      // L0 skips SSN and DOB (idNumber/dob* are undefined in route params),
       // so we omit those fields from the attachKycInfo call.
       // L1 and L2 include all fields.
       const kycPayload: Parameters<typeof attachKycInfo>[0] = {
