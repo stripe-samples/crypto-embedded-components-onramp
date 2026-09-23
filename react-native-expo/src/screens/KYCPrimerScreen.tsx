@@ -3,7 +3,7 @@
  *
  * The user manually picks their country of residence here. That choice determines
  * which KYC flow they enter:
- *   - US / CA / CO / PH → KYCScreen (country-specific ID → AddressScreen)
+ *   - US / CA / CO / PH → KYCScreen (name / ID / DOB → AddressScreen)
  *   - EU  → EuKycScreen (Basic Info → Identifiers → Attestation → Verify Docs)
  *
  * No API calls are made here.
