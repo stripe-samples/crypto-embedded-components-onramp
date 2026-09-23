@@ -3,7 +3,7 @@
  *
  * Recommended operations at this step:
  *   - Collect first name and last name (all tiers).
- *   - L1/L2: also collect SSN and date of birth.
+ *   - L1/L2: also collect the residence-specific national ID and date of birth.
  *   - No API calls are made here; all fields are forwarded to AddressScreen
  *     which bundles them into a single attachKycInfo() call.
  *
@@ -12,7 +12,7 @@
  *       If the user later attempts a purchase above the L0 limit, PaymentMethod
  *       triggers a step-up (KYCStepUpScreen) to collect SSN + DOB.
  *
- *   L1: name + SSN + DOB. AddressScreen calls attachKycInfo with all fields.
+ *   L1: name + national ID + DOB. AddressScreen calls attachKycInfo with all fields.
  *
  *   L2: same fields as L1. AddressScreen additionally calls verifyIdentity()
  *       to capture a government-issued ID document and selfie.
@@ -33,40 +33,56 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { useSettings } from '../context/SettingsContext';
+import { getNonEuKycCountry } from '../kycCountries';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'KYC'>;
   route: RouteProp<RootStackParamList, 'KYC'>;
 };
 
-function formatSSN(raw: string): string {
-  if (raw.length <= 3) return raw;
-  if (raw.length <= 5) return `${raw.slice(0, 3)}-${raw.slice(3)}`;
-  return `${raw.slice(0, 3)}-${raw.slice(3, 5)}-${raw.slice(5)}`;
+function formatNationalId(raw: string, country: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (country === 'US') {
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5, 9)}`;
+  }
+  if (country === 'CA') {
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}`;
+  }
+  return raw;
 }
 
-function maskSSN(raw: string): string {
-  if (raw.length < 9) return formatSSN(raw);
-  return `•••-••-${raw.slice(5)}`;
+function maskNationalId(raw: string, country: string): string {
+  const formatted = formatNationalId(raw, country);
+  if (raw.length <= 4) return formatted;
+  return `${'•'.repeat(Math.max(0, formatted.length - 4))}${formatted.slice(-4)}`;
 }
 
 export default function KYCScreen({ navigation, route }: Props) {
-  const { customerId, authToken } = route.params;
+  const { customerId, authToken, country } = route.params;
   const { settings } = useSettings();
+  const countryConfig = getNonEuKycCountry(country);
 
-  const collectSensitiveFields = settings.kycTier !== 'L0';
-  const effectiveTier = settings.kycTier;
+  // CA, CO, and PH require national-ID collection and therefore cannot use
+  // the demo's name-and-address-only L0 path.
+  const effectiveTier = settings.kycTier === 'L0' && country !== 'US'
+    ? 'L1'
+    : settings.kycTier;
+  const collectSensitiveFields = effectiveTier !== 'L0';
 
   const [form, setForm] = useState({
     firstName: '', lastName: '',
     dobDay: '', dobMonth: '', dobYear: '',
   });
-  const [ssnRaw, setSsnRaw] = useState('');
-  const [ssnFocused, setSsnFocused] = useState(false);
+  const [idNumberRaw, setIdNumberRaw] = useState('');
+  const [idNumberFocused, setIdNumberFocused] = useState(false);
+  const maxIdLength = Math.max(...countryConfig.nationalId.validLengths);
 
-  const handleSSNChange = (text: string) => {
-    const digits = text.replace(/\D/g, '').slice(0, 9);
-    setSsnRaw(digits);
+  const handleIdNumberChange = (text: string) => {
+    setIdNumberRaw(text.replace(/\D/g, '').slice(0, maxIdLength));
   };
 
   const handleNext = () => {
@@ -78,10 +94,19 @@ export default function KYCScreen({ navigation, route }: Props) {
       return;
     }
 
-    // L1/L2 additionally require SSN and date of birth.
+    // L1/L2 additionally require a country-specific national ID and date of birth.
     if (collectSensitiveFields) {
-      if (ssnRaw.length !== 9 || !dobDay || !dobMonth || !dobYear) {
-        Alert.alert('Error', 'Please fill in all required fields.');
+      const idNumberIsValid = countryConfig.nationalId.validLengths.includes(idNumberRaw.length);
+      if (!idNumberIsValid) {
+        const lengths = countryConfig.nationalId.validLengths.join(' or ');
+        Alert.alert(
+          `Invalid ${countryConfig.nationalId.shortLabel}`,
+          `${countryConfig.nationalId.shortLabel} must contain ${lengths} digits with no spaces or punctuation.`,
+        );
+        return;
+      }
+      if (!dobDay || !dobMonth || !dobYear) {
+        Alert.alert('Error', 'Please enter your full date of birth.');
         return;
       }
     }
@@ -91,11 +116,12 @@ export default function KYCScreen({ navigation, route }: Props) {
     navigation.navigate('Address', {
       customerId,
       authToken,
+      country,
       firstName,
       lastName,
       ...(collectSensitiveFields
         ? {
-            idNumber: ssnRaw,
+            idNumber: idNumberRaw.trim(),
             dobDay: parseInt(dobDay, 10),
             dobMonth: parseInt(dobMonth, 10),
             dobYear: parseInt(dobYear, 10),
@@ -107,7 +133,9 @@ export default function KYCScreen({ navigation, route }: Props) {
   const set = (key: keyof typeof form) => (val: string) =>
     setForm(prev => ({ ...prev, [key]: val }));
 
-  const ssnDisplay = ssnFocused ? formatSSN(ssnRaw) : maskSSN(ssnRaw);
+  const idNumberDisplay = idNumberFocused
+    ? formatNationalId(idNumberRaw, country)
+    : maskNationalId(idNumberRaw, country);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -117,7 +145,7 @@ export default function KYCScreen({ navigation, route }: Props) {
       <Text style={styles.title}>Add your personal info</Text>
       <Text style={styles.subtitle}>
         {collectSensitiveFields
-          ? 'Enter your name, SSN, and date of birth'
+          ? `Enter your name, ${countryConfig.nationalId.shortLabel}, and date of birth`
           : 'Enter your full name'}
       </Text>
 
@@ -127,7 +155,7 @@ export default function KYCScreen({ navigation, route }: Props) {
       <Row label="Last Name" value={form.lastName} onChange={set('lastName')} autoCapitalize="words" />
 
       {/* Test mode hint */}
-      <View style={styles.testCard}>
+      {country === 'US' && <View style={styles.testCard}>
         <Text style={styles.testCardTitle}>Test mode</Text>
         <Text style={styles.testCardBody}>
           Use <Text style={styles.testCardCode}>Verified</Text> as the last name to pass L0 KYC in test mode.{' '}
@@ -138,24 +166,27 @@ export default function KYCScreen({ navigation, route }: Props) {
             See all test values →
           </Text>
         </Text>
-      </View>
+      </View>}
 
-      {/* SSN + DOB — L1 and L2 only */}
+      {/* National ID + DOB — L1 and L2 only */}
       {collectSensitiveFields && (
         <>
           <View style={{ marginBottom: 16 }}>
-            <Text style={s.label}>Social Security Number</Text>
+            <Text style={s.label}>{countryConfig.nationalId.label}</Text>
             <TextInput
               style={s.input}
-              value={ssnDisplay}
-              onChangeText={handleSSNChange}
-              onFocus={() => setSsnFocused(true)}
-              onBlur={() => setSsnFocused(false)}
-              placeholder="XXX-XX-XXXX"
+              value={idNumberDisplay}
+              onChangeText={handleIdNumberChange}
+              onFocus={() => setIdNumberFocused(true)}
+              onBlur={() => setIdNumberFocused(false)}
+              placeholder={countryConfig.nationalId.placeholder}
               placeholderTextColor="#555"
-              keyboardType="numeric"
-              maxLength={11}
+              keyboardType="number-pad"
+              maxLength={country === 'US' || country === 'CA' ? maxIdLength + 2 : maxIdLength}
             />
+            <Text style={styles.fieldHint}>
+              {countryConfig.nationalId.validLengths.join(' or ')} digits; numbers only
+            </Text>
           </View>
 
           <Text style={styles.section}>Date of Birth</Text>
@@ -263,6 +294,7 @@ const styles = StyleSheet.create({
   testCardCode: { color: '#aaa', fontFamily: 'monospace', fontSize: 12 },
   testCardLink: { color: '#635BFF' },
   section: { color: '#635BFF', fontSize: 14, fontWeight: '600', marginBottom: 12, marginTop: 8 },
+  fieldHint: { color: '#777', fontSize: 12, marginTop: 6 },
   row3: { flexDirection: 'row', marginBottom: 16, marginHorizontal: -4 },
   button: {
     backgroundColor: '#635BFF',

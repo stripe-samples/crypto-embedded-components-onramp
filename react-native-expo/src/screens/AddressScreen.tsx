@@ -23,6 +23,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { useSettings } from '../context/SettingsContext';
+import { getNonEuKycCountry } from '../kycCountries';
 
 const STATE_NAMES: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
@@ -46,7 +47,7 @@ type Props = {
 };
 
 export default function AddressScreen({ navigation, route }: Props) {
-  const { customerId, authToken, firstName, lastName, idNumber, dobDay, dobMonth, dobYear } = route.params;
+  const { customerId, authToken, country, firstName, lastName, idNumber, dobDay, dobMonth, dobYear } = route.params;
   const [submitting, setSubmitting] = useState(false);
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [form, setForm] = useState({
@@ -56,6 +57,11 @@ export default function AddressScreen({ navigation, route }: Props) {
   const { attachKycInfo, verifyIdentity } = useOnramp();
   // L2 tier adds a government-ID + selfie verification step after address submission.
   const { settings } = useSettings();
+  const countryConfig = getNonEuKycCountry(country);
+  // CA, CO, and PH require national ID + DOB, so they cannot use L0 KYC.
+  const effectiveTier = settings.kycTier === 'L0' && country !== 'US'
+    ? 'L1'
+    : settings.kycTier;
 
   const handleSubmit = async () => {
     const { line1, city, state, postalCode } = form;
@@ -78,9 +84,9 @@ export default function AddressScreen({ navigation, route }: Props) {
           city,
           state,
           postalCode,
-          country: 'US',
+          country,
         },
-        ...(idNumber ? { idNumber } : {}),
+        ...(idNumber ? { idNumber, idType: countryConfig.nationalId.type } : {}),
         ...(dobDay && dobMonth && dobYear
           ? { dateOfBirth: { day: dobDay, month: dobMonth, year: dobYear } }
           : {}),
@@ -96,7 +102,7 @@ export default function AddressScreen({ navigation, route }: Props) {
       // For L0 and L1 we skip this and the user proceeds with their current
       // KYC tier. If they later attempt a purchase above the tier's limit,
       // the KYCStepUp screen will guide them through the upgrade.
-      if (settings.kycTier === 'L2') {
+      if (effectiveTier === 'L2') {
         const idResult = await verifyIdentity();
         if (idResult?.error) {
           console.log('Identity verification note:', idResult.error.message);
@@ -119,9 +125,9 @@ export default function AddressScreen({ navigation, route }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.tierBadge}>{settings.kycTier}</Text>
+      <Text style={styles.tierBadge}>{effectiveTier}</Text>
       <Text style={styles.title}>Add your home address</Text>
-      <Text style={styles.subtitle}>Currently only US addresses are supported</Text>
+      <Text style={styles.subtitle}>{countryConfig.name} ({country})</Text>
 
       <Row label="Address line 1" value={form.line1} onChange={set('line1')} autoCapitalize="words" />
       <Row label="Address line 2 (optional)" value={form.line2} onChange={set('line2')} autoCapitalize="words" />
@@ -129,19 +135,36 @@ export default function AddressScreen({ navigation, route }: Props) {
 
       <View style={styles.row2}>
         <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={s.label}>State</Text>
-          <TouchableOpacity
-            style={s.pickerButton}
-            onPress={() => setShowStatePicker(true)}
-          >
-            <Text style={form.state ? s.pickerText : s.pickerPlaceholder}>
-              {form.state ? STATE_NAMES[form.state] : 'Select state'}
-            </Text>
-            <Text style={s.pickerArrow}>▼</Text>
-          </TouchableOpacity>
+          {country === 'US' ? (
+            <>
+              <Text style={s.label}>{countryConfig.stateLabel}</Text>
+              <TouchableOpacity
+                style={s.pickerButton}
+                onPress={() => setShowStatePicker(true)}
+              >
+                <Text style={form.state ? s.pickerText : s.pickerPlaceholder}>
+                  {form.state ? STATE_NAMES[form.state] : 'Select state'}
+                </Text>
+                <Text style={s.pickerArrow}>▼</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Row
+              label={countryConfig.stateLabel}
+              value={form.state}
+              onChange={set('state')}
+              autoCapitalize="words"
+            />
+          )}
         </View>
         <View style={{ flex: 1 }}>
-          <Row label="ZIP" value={form.postalCode} onChange={set('postalCode')} keyboardType="numeric" />
+          <Row
+            label={countryConfig.postalCodeLabel}
+            value={form.postalCode}
+            onChange={set('postalCode')}
+            keyboardType={country === 'CA' ? 'default' : 'numeric'}
+            autoCapitalize={country === 'CA' ? 'characters' : 'none'}
+          />
         </View>
       </View>
 
@@ -150,9 +173,9 @@ export default function AddressScreen({ navigation, route }: Props) {
         <Text style={styles.infoCardTitle}>SDK calls on submit</Text>
         <Text style={styles.infoCardBody}>
           <Text style={styles.infoCode}>attachKycInfo(&#123; firstName, lastName, address
-            {settings.kycTier !== 'L0' ? ', idNumber, dateOfBirth' : ''}
+            {effectiveTier !== 'L0' ? ', idType, idNumber, dateOfBirth' : ''}
           {' '}&#125;)</Text>
-          {settings.kycTier === 'L2' && (
+          {effectiveTier === 'L2' && (
             <Text>{'\n'}<Text style={styles.infoCode}>verifyIdentity()</Text></Text>
           )}
         </Text>
