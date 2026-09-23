@@ -166,7 +166,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
           {!isEu && effectiveTier === 'L2' && (
             <View style={styles.noteBanner}>
               <Text style={styles.noteText}>
-                The ID and selfie are captured via Stripe&apos;s built-in secure verification flow.
+                The ID and selfie are captured via Stripe's built-in secure verification flow.
               </Text>
             </View>
           )}
