@@ -1,5 +1,4 @@
 import type { Onramp } from '@stripe/stripe-react-native';
-import { EU_COUNTRIES, EU_COUNTRY_NAMES } from './euIdentifiers';
 
 export type NonEuKycCountry = 'US' | 'CA' | 'CO' | 'PH';
 
@@ -73,33 +72,6 @@ export const NON_EU_KYC_COUNTRIES: Record<NonEuKycCountry, NonEuKycCountryConfig
     },
   },
 };
-
-export const COUNTRY_NAMES: Record<string, string> = {
-  ...EU_COUNTRY_NAMES,
-  ...Object.fromEntries(
-    Object.entries(NON_EU_KYC_COUNTRIES).map(([code, country]) => [code, country.name]),
-  ),
-};
-
-export const countryFlag = (code: string) =>
-  [...code.toUpperCase()]
-    .map(character => String.fromCodePoint(0x1F1E6 - 65 + character.charCodeAt(0)))
-    .join('');
-
-export const COUNTRY_OPTIONS = [
-  ...(Object.keys(NON_EU_KYC_COUNTRIES) as NonEuKycCountry[]).map(code => ({
-    code,
-    label: NON_EU_KYC_COUNTRIES[code].name,
-    flag: countryFlag(code),
-  })),
-  ...Object.entries(EU_COUNTRY_NAMES)
-    .sort(([, a], [, b]) => a.localeCompare(b))
-    .map(([code, label]) => ({ code, label, flag: countryFlag(code) })),
-];
-
-export function isEuKycCountry(country: string): boolean {
-  return EU_COUNTRIES.has(country);
-}
 
 export function isNonEuKycCountry(country: string): country is NonEuKycCountry {
   return country in NON_EU_KYC_COUNTRIES;

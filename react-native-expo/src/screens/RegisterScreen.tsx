@@ -9,8 +9,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { createAuthIntent, saveUser, getCryptoCustomer } from '../api/client';
+import { EU_COUNTRY_NAMES } from '../euIdentifiers';
 import {
-  COUNTRY_OPTIONS,
   getNonEuKycCountry,
   isNonEuKycCountry,
 } from '../kycCountries';
@@ -21,10 +21,18 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Register'>;
 };
 
-const COUNTRIES = COUNTRY_OPTIONS.map(({ code, label, flag }) => ({
-  code,
-  label: `${flag} ${label}`,
-}));
+const countryFlag = (code: string) =>
+  [...code.toUpperCase()].map(c => String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))).join('');
+
+const COUNTRIES = [
+  { code: 'US', label: `${countryFlag('US')} US` },
+  { code: 'CA', label: `${countryFlag('CA')} CA` },
+  { code: 'CO', label: `${countryFlag('CO')} CO` },
+  { code: 'PH', label: `${countryFlag('PH')} PH` },
+  ...Object.entries(EU_COUNTRY_NAMES)
+    .sort(([, a], [, b]) => a.localeCompare(b))
+    .map(([code]) => ({ code, label: `${countryFlag(code)} ${code}` })),
+];
 
 export default function RegisterScreen({ navigation, route }: Props) {
   const { email, authToken: initialToken } = route.params;

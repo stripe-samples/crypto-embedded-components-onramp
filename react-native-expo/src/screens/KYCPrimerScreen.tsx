@@ -17,12 +17,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 import { useSettings } from '../context/SettingsContext';
+import { EU_COUNTRY_NAMES, EU_COUNTRIES } from '../euIdentifiers';
 import {
-  COUNTRY_NAMES,
-  COUNTRY_OPTIONS,
-  countryFlag,
   getNonEuKycCountry,
-  isEuKycCountry,
   isNonEuKycCountry,
 } from '../kycCountries';
 
@@ -50,6 +47,16 @@ const EU_REQUIREMENTS = [
   'Government-issued photo ID + selfie',
 ];
 
+const COUNTRY_OPTIONS: { code: string; label: string }[] = [
+  { code: 'US', label: 'United States' },
+  { code: 'CA', label: 'Canada' },
+  { code: 'CO', label: 'Colombia' },
+  { code: 'PH', label: 'Philippines' },
+  ...Object.entries(EU_COUNTRY_NAMES)
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([code, name]) => ({ code, label: name })),
+];
+
 export default function KYCPrimerScreen({ navigation, route }: Props) {
   const { customerId, authToken, registrationCountry } = route.params;
   const { settings } = useSettings();
@@ -58,7 +65,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
   const [country, setCountry] = useState(registrationCountry ?? '');
   const [showPicker, setShowPicker] = useState(false);
 
-  const isEu = isEuKycCountry(country);
+  const isEu = EU_COUNTRIES.has(country);
   const nonEuConfig = isNonEuKycCountry(country) ? getNonEuKycCountry(country) : null;
   // CA, CO, and PH require national ID + DOB, so they cannot use L0 KYC.
   const effectiveTier = nonEuConfig && settings.kycTier === 'L0' && country !== 'US'
@@ -81,7 +88,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
   };
 
   const selectedLabel = country
-    ? `${countryFlag(country)} ${COUNTRY_NAMES[country] ?? country} (${country})`
+    ? `${nonEuConfig?.name ?? EU_COUNTRY_NAMES[country] ?? country} (${country})`
     : 'Select your country of residence';
 
   return (
@@ -130,7 +137,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
               }}
             >
               <Text style={[styles.pickerItemText, country === opt.code && styles.pickerItemTextSelected]}>
-                {opt.flag} {opt.label} ({opt.code})
+                {opt.label} ({opt.code})
               </Text>
             </TouchableOpacity>
           ))}
