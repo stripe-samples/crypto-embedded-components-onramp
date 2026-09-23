@@ -96,8 +96,7 @@ export default function AddressScreen({ navigation, route }: Props) {
       const result = await attachKycInfo(kycPayload);
 
       if (result?.error) {
-        console.error('[KYC] attachKycInfo failed:', result.error);
-        Alert.alert('KYC Error', result.error.userMessage || result.error.message);
+        Alert.alert('KYC Error', result.error.message);
         return;
       }
 
