@@ -16,7 +16,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView, Modal, FlatList,
+  ActivityIndicator, Alert, ScrollView, Modal, FlatList, Linking,
 } from 'react-native';
 import { useOnramp } from '../hooks/useOnramp';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
