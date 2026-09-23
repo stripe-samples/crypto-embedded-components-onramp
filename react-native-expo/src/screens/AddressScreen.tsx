@@ -47,10 +47,7 @@ type Props = {
 };
 
 export default function AddressScreen({ navigation, route }: Props) {
-  const {
-    customerId, authToken, country, firstName, lastName,
-    idNumber, dobDay, dobMonth, dobYear,
-  } = route.params;
+  const { customerId, authToken, country, firstName, lastName, idNumber, dobDay, dobMonth, dobYear } = route.params;
   const [submitting, setSubmitting] = useState(false);
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [form, setForm] = useState({
