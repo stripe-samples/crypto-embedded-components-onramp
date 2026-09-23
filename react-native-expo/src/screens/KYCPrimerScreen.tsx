@@ -155,14 +155,6 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {nonEuConfig && country !== 'US' && settings.kycTier === 'L0' && (
-            <View style={styles.noteBanner}>
-              <Text style={styles.noteText}>
-                {nonEuConfig.name} requires identity information, so this flow collects L1 even when the demo is configured for L0.
-              </Text>
-            </View>
-          )}
-
           <Text style={styles.requiredLabel}>{"What's required:"}</Text>
           {requirements.map(item => (
             <View key={item} style={styles.bulletRow}>
