@@ -61,6 +61,7 @@ export default function AddressScreen({ navigation, route }: Props) {
   // L2 tier adds a government-ID + selfie verification step after address submission.
   const { settings } = useSettings();
   const countryConfig = getNonEuKycCountry(country);
+  // CA, CO, and PH require national ID + DOB, so they cannot use L0 KYC.
   const effectiveTier = settings.kycTier === 'L0' && country !== 'US'
     ? 'L1'
     : settings.kycTier;

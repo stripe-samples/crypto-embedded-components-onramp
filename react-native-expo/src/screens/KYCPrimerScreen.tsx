@@ -51,6 +51,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
 
   const isEu = isEuKycCountry(country);
   const nonEuConfig = isNonEuKycCountry(country) ? getNonEuKycCountry(country) : null;
+  // CA, CO, and PH require national ID + DOB, so they cannot use L0 KYC.
   const effectiveTier = nonEuConfig && settings.kycTier === 'L0' && country !== 'US'
     ? 'L1'
     : settings.kycTier;
