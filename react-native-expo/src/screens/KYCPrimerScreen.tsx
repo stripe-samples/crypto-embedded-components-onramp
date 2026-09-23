@@ -31,6 +31,15 @@ type Props = {
   route: RouteProp<RootStackParamList, 'KYCPrimer'>;
 };
 
+const REQUIREMENTS_BY_TIER = {
+  L0: (_idLabel: string) => ['Full name', 'Home address'],
+  L1: (idLabel: string) => ['Full name', idLabel, 'Date of birth', 'Home address'],
+  L2: (idLabel: string) => [
+    'Full name', idLabel, 'Date of birth',
+    'Home address', 'Government-issued photo ID', 'Selfie',
+  ],
+};
+
 const EU_REQUIREMENTS = [
   'Full name and date of birth',
   'Home address',
@@ -59,16 +68,7 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
     ? isEu
       ? EU_REQUIREMENTS
       : nonEuConfig
-        ? [
-            'Full name',
-            ...(effectiveTier !== 'L0'
-              ? [nonEuConfig.nationalId.label, 'Date of birth']
-              : []),
-            'Home address',
-            ...(effectiveTier === 'L2'
-              ? ['Government-issued photo ID', 'Selfie']
-              : []),
-          ]
+        ? REQUIREMENTS_BY_TIER[effectiveTier](nonEuConfig.nationalId.label)
         : null
     : null;
 
