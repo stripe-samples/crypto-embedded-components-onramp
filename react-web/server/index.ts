@@ -58,6 +58,16 @@ const requestOptions = (oauthToken: string): Stripe.RequestOptions => ({
 const statusCodeOf = (error: any): number => error?.statusCode ?? 500;
 const toUserError = (error: any): string => error?.message ?? String(error);
 
+// Resolve the true client ip address when running on Cloud environments which terminate
+// TLS at an application load balancer (e.g. GCP Cloud Run)
+// Fallback to socket.remoteAddress() if not available
+const getClientIp = (req: express.Request): string => {
+  const forwardedFor = req.headers["x-forwarded-for"];
+  const header = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+  const firstIp = header?.split(",")[0]?.trim();
+  return firstIp || req.socket.remoteAddress || "";
+};
+
 // login.link.com isn't a Stripe API host, so it has no stripe-node bindings —
 // these calls stay on axios.
 app.post("/api/link_auth_intent", async (req, res) => {
@@ -151,7 +161,7 @@ app.post("/api/crypto/onramp_sessions", async (req, res) => {
         wallet_address: req.body.wallet_address,
         destination_network: req.body.destination_network,
         destination_networks: [req.body.destination_network],
-        customer_ip_address: req.ip || req.socket.remoteAddress || "",
+        customer_ip_address: getClientIp(req),
       } as any,
       requestOptions(accessToken),
     );
@@ -224,7 +234,7 @@ app.post(
               type: "online",
               accepted_at: Math.floor(Date.now() / 1000),
               online: {
-                ip_address: req.ip || req.socket.remoteAddress || "",
+                ip_address: getClientIp(req),
                 user_agent: req.headers["user-agent"] || "",
               },
             },
@@ -400,7 +410,7 @@ app.get("/api/crypto/onramp_transaction_limits", async (req, res) => {
       {
         wallet_address,
         destination_network,
-        customer_ip_address: req.ip || req.socket.remoteAddress || "127.0.0.1",
+        customer_ip_address: getClientIp(req),
       },
       requestOptions(accessToken),
     );
