@@ -16,6 +16,12 @@
  *                challenge is skipped; EU checkout will then return a
  *                wallet_ownership_verification_required error at payment time.
  *
+ *   feeResponsibility  Who bears the transaction fees for the onramp session.
+ *                'consumer' (default) → the signed-in user pays network + transaction
+ *                fees. 'merchant' → fee_responsibility: "merchant" is sent at session
+ *                creation; the consumer pays $0 in fees and the merchant is billed
+ *                asynchronously via Fortuna. See fees.subsidy on the quote response.
+ *
  * Wrap the navigation root with <SettingsProvider> and read settings in any
  * screen with the useSettings() hook.
  */
@@ -63,11 +69,21 @@ export type KycTier = 'L0' | 'L1' | 'L2';
  */
 export type LimitSource = 'api' | 'local';
 
+/**
+ * Who bears the transaction fees for a session.
+ *
+ *   'consumer' — the signed-in user pays network + transaction fees (default).
+ *   'merchant' — the merchant covers consumer fees. Sent as
+ *                fee_responsibility: "merchant" on session creation.
+ */
+export type FeeResponsibility = 'consumer' | 'merchant';
+
 export interface AppSettings {
   kycTier: KycTier;
   limitSource: LimitSource;
   /** When false, skip the proactive wallet ownership challenge for EU wallets. */
   walletOwnershipVerification: boolean;
+  feeResponsibility: FeeResponsibility;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +94,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   kycTier: 'L1',
   limitSource: 'local',
   walletOwnershipVerification: true,
+  feeResponsibility: 'consumer',
 };
 
 const STORAGE_KEY = '@crypto_onramp_settings_v1';

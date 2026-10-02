@@ -272,6 +272,51 @@ export default function SettingsScreen({ navigation: _navigation }: Props) {
         </View>
       )}
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Fee Responsibility section */}
+      {/* ------------------------------------------------------------------ */}
+      <Text style={[styles.sectionTitle, { marginTop: 36 }]}>
+        Fee Responsibility
+      </Text>
+      <Text style={styles.sectionSubtitle}>
+        Choose who pays the onramp transaction fees. "Merchant" sends{' '}
+        <Text style={styles.mono}>fee_responsibility: "merchant"</Text> when
+        creating the session — the consumer pays $0 in fees and the merchant is
+        billed asynchronously via Fortuna.
+      </Text>
+
+      <View style={styles.toggleCard}>
+        <View style={styles.toggleLeft}>
+          <Text style={styles.toggleTitle}>
+            {settings.feeResponsibility === 'merchant' ? 'Merchant covers fees' : 'Consumer pays fees'}
+          </Text>
+          <Text style={styles.toggleDesc}>
+            {settings.feeResponsibility === 'merchant'
+              ? 'Sends fee_responsibility: "merchant" on session creation'
+              : 'Default — consumer pays network + transaction fees'}
+          </Text>
+        </View>
+        <Switch
+          value={settings.feeResponsibility === 'merchant'}
+          onValueChange={v => updateSettings({ feeResponsibility: v ? 'merchant' : 'consumer' })}
+          trackColor={{ false: '#333', true: '#635BFF' }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      {settings.feeResponsibility === 'merchant' && (
+        <View style={styles.infoBox}>
+          <Text style={styles.infoTitle}>Quote response</Text>
+          <Text style={styles.infoDesc}>
+            The quote's <Text style={styles.mono}>fees.subsidy</Text> object will
+            show <Text style={styles.mono}>original_fee</Text> (what the fee would
+            have been) and{' '}
+            <Text style={styles.mono}>total_fee_after_subsidization</Text> (what the
+            consumer actually pays — $0.00 when fully subsidized).
+          </Text>
+        </View>
+      )}
+
     </ScrollView>
   );
 }

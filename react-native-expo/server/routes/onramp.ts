@@ -182,6 +182,7 @@ router.post('/create_onramp_session', async (req: Request, res: Response) => {
       payment_token, source_amount, source_currency,
       destination_currency, destination_network, destination_networks,
       wallet_address, crypto_customer_id, customer_ip_address, settlement_speed,
+      fee_responsibility,
     } = req.body;
 
     const nets: string[] = destination_networks ?? [destination_network];
@@ -189,9 +190,10 @@ router.post('/create_onramp_session', async (req: Request, res: Response) => {
     const data = await callWithRetry(
       oauthToken => stripe.crypto.onrampSessions.create(
         {
-          // crypto_customer_id, payment_token, wallet_address, and ui_mode aren't
-          // in this alpha SDK's typed params yet, so this cast mirrors the extra-param
-          // pattern the other server SDKs use for the same beta fields.
+          // crypto_customer_id, payment_token, wallet_address, ui_mode, and
+          // fee_responsibility aren't in this alpha SDK's typed params yet, so this
+          // cast mirrors the extra-param pattern the other server SDKs use for the
+          // same beta fields.
           ui_mode: 'headless',
           crypto_customer_id,
           payment_token,
@@ -204,6 +206,7 @@ router.post('/create_onramp_session', async (req: Request, res: Response) => {
           wallet_address,
           customer_ip_address,
           ...(settlement_speed ? { settlement_speed } : {}),
+          ...(fee_responsibility ? { fee_responsibility } : {}),
         } as any,
         requestOptions(oauthToken),
       ),

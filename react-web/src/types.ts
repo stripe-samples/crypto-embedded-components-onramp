@@ -23,10 +23,14 @@ export type Wallet = {
   wallet_address: string;
 };
 
+export type FeeResponsibility = "consumer" | "merchant";
+
 export type OnrampSession = {
   id: string;
   livemode: boolean;
   source_total_amount: string;
+  // Echoed from session creation — who bears the transaction fees.
+  fee_responsibility?: FeeResponsibility;
   transaction_details: {
     destination_amount: string;
     destination_currency: string;
@@ -38,6 +42,11 @@ export type OnrampSession = {
     fees: {
       network_fee_amount: string;
       transaction_fee_amount: string;
+      // Present only when fee_responsibility != "consumer".
+      subsidy?: {
+        original_fee: string;
+        total_fee_after_subsidization: string;
+      };
     };
   };
 };
