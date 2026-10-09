@@ -162,6 +162,9 @@ app.post("/api/crypto/onramp_sessions", async (req, res) => {
         destination_network: req.body.destination_network,
         destination_networks: [req.body.destination_network],
         customer_ip_address: getClientIp(req),
+        // fee_responsibility isn't in this alpha SDK's typed params yet — "consumer"
+        // (default) or "merchant" to subsidize consumer fees. Passed through from client.
+        ...(req.body.fee_responsibility ? { fee_responsibility: req.body.fee_responsibility } : {}),
       } as any,
       requestOptions(accessToken),
     );
