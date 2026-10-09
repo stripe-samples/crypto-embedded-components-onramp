@@ -559,7 +559,7 @@ const ExampleAppInner: React.FC<{
             source_amount: amount,
             wallet_address: selectedWallet,
             destination_network: selectedWalletNetwork,
-            fee_responsibility: feeResponsibility,
+            ...(feeResponsibility === "merchant" ? { fee_responsibility: "merchant" } : {}),
           }),
         });
         const data = await response.json();

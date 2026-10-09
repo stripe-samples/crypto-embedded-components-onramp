@@ -337,7 +337,7 @@ export async function createOnrampSession(params: {
       wallet_address: params.walletAddress,
       crypto_customer_id: params.customerId,
       customer_ip_address: '127.0.0.1',
-      fee_responsibility: params.feeResponsibility ?? 'consumer',
+      ...(params.feeResponsibility === 'merchant' ? { fee_responsibility: 'merchant' } : {}),
     },
     params.authToken,
   );
