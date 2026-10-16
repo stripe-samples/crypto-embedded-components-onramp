@@ -173,6 +173,11 @@ export interface QuoteResponse {
     fees: {
       network_fee_amount: string | null;
       transaction_fee_amount: string | null;
+      // Present only when the session's fee_responsibility != "consumer".
+      subsidy?: {
+        original_fee: string;
+        total_fee_after_subsidization: string;
+      };
     } | null;
   };
 }
@@ -316,6 +321,8 @@ export async function createOnrampSession(params: {
   sourceAmount: number;
   sourceCurrency: string;
   destinationCurrency: string;
+  /** Who bears the transaction fees for this session. Defaults to 'consumer'. */
+  feeResponsibility?: 'consumer' | 'merchant';
 }): Promise<ApiResult<OnrampSessionResponse>> {
   return post(
     '/v1/create_onramp_session',
@@ -330,6 +337,7 @@ export async function createOnrampSession(params: {
       wallet_address: params.walletAddress,
       crypto_customer_id: params.customerId,
       customer_ip_address: '127.0.0.1',
+      ...(params.feeResponsibility === 'merchant' ? { fee_responsibility: 'merchant' } : {}),
     },
     params.authToken,
   );

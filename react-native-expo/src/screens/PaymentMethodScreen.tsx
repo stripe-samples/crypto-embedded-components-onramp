@@ -531,6 +531,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         sourceAmount: amount,
         sourceCurrency,
         destinationCurrency: destCurrency,
+        feeResponsibility: settings.feeResponsibility,
       });
 
       if (!sessionResult.success) {

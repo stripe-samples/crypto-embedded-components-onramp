@@ -22,7 +22,13 @@ import type {
 } from "@stripe/crypto";
 import { loadCryptoOnrampAndInitialize } from "@stripe/crypto";
 import { LinkAuthenticationModal } from "./LinkAuthenticationModal";
-import type { AccountStatus, KycLevel, KycRegion, CheckoutError } from "./types";
+import type {
+  AccountStatus,
+  KycLevel,
+  KycRegion,
+  CheckoutError,
+  FeeResponsibility,
+} from "./types";
 
 function timestamp(): string {
   return new Date().toLocaleTimeString(undefined, {
@@ -118,6 +124,9 @@ const ExampleAppInner: React.FC<{
   const [currentKycTier, setCurrentKycTier] = useState<"L0" | "L1" | "L2" | null>(null);
   const [kycTiers, setKycTiers] = useState<Array<{ tier: string; verification_status: string }>>([]);
   const [limitSource, setLimitSource] = useState<"api" | "local">("api");
+  // Who bears the transaction fees for sessions this app creates. "merchant" subsidizes
+  // the consumer's fees — see fees.subsidy in the quote/session responses.
+  const [feeResponsibility, setFeeResponsibility] = useState<FeeResponsibility>("consumer");
   const [kycRegion, setKycRegion] = useState<KycRegion>(null);
   const [providedFields, setProvidedFields] = useState<string[]>([]);
   const [cryptoCustomerId, setCryptoCustomerId] = useState<
@@ -550,6 +559,7 @@ const ExampleAppInner: React.FC<{
             source_amount: amount,
             wallet_address: selectedWallet,
             destination_network: selectedWalletNetwork,
+            ...(feeResponsibility === "merchant" ? { fee_responsibility: "merchant" } : {}),
           }),
         });
         const data = await response.json();
@@ -575,6 +585,7 @@ const ExampleAppInner: React.FC<{
       cryptoPaymentToken,
       selectedWallet,
       selectedWalletNetwork,
+      feeResponsibility,
       surfaceError,
     ],
   );
@@ -763,6 +774,28 @@ const ExampleAppInner: React.FC<{
               label={
                 <Typography sx={{ color: c.textSecondary, fontSize: "0.8rem" }}>
                   EU Wallet Ownership Verification
+                </Typography>
+              }
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={feeResponsibility === "merchant"}
+                  onChange={(e) =>
+                    setFeeResponsibility(e.target.checked ? "merchant" : "consumer")
+                  }
+                  size="small"
+                  sx={{
+                    "& .MuiSwitch-switchBase.Mui-checked": { color: c.accent },
+                    "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                      bgcolor: c.accent,
+                    },
+                  }}
+                />
+              }
+              label={
+                <Typography sx={{ color: c.textSecondary, fontSize: "0.8rem" }}>
+                  Merchant Covers Fees
                 </Typography>
               }
             />

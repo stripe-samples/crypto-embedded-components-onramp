@@ -1656,6 +1656,60 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                   label="Transaction fee"
                   value={`$${td.fees.transaction_fee_amount}`}
                 />
+                {(() => {
+                  const totalFees = (
+                    parseFloat(td.fees.network_fee_amount) +
+                    parseFloat(td.fees.transaction_fee_amount)
+                  ).toFixed(2);
+                  const subsidy = td.fees.subsidy;
+                  return (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Typography
+                        sx={{ color: colors.textSecondary, fontSize: "0.85rem" }}
+                      >
+                        Total fees
+                      </Typography>
+                      {subsidy ? (
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography
+                            sx={{
+                              color: colors.textMuted,
+                              fontSize: "0.85rem",
+                              textDecoration: "line-through",
+                            }}
+                          >
+                            ${totalFees}
+                          </Typography>
+                          <Typography
+                            sx={{
+                              color: colors.success,
+                              fontSize: "0.85rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            ${subsidy.total_fee_after_subsidization}
+                          </Typography>
+                        </Stack>
+                      ) : (
+                        <Typography
+                          sx={{
+                            color: colors.textPrimary,
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          ${totalFees}
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                })()}
               </Stack>
               <Stack direction="row" spacing={1.5}>
                 <Button

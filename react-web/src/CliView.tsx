@@ -595,6 +595,16 @@ export const CliView: React.FC<CliViewProps> = (props) => {
                 `  Txn fee:      $${td.fees.transaction_fee_amount}`,
                 "gray",
               );
+              if (td.fees.subsidy) {
+                const totalFees = (
+                  parseFloat(td.fees.network_fee_amount) +
+                  parseFloat(td.fees.transaction_fee_amount)
+                ).toFixed(2);
+                print(
+                  `  Total fees:   $${totalFees} (merchant-subsidized) → $${td.fees.subsidy.total_fee_after_subsidization}`,
+                  "green",
+                );
+              }
               print("", "white");
               print("Run 'checkout' to confirm.", "cyan");
             } else {

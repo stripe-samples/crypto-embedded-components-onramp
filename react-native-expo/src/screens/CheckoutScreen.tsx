@@ -206,7 +206,9 @@ export default function CheckoutScreen({ navigation, route }: Props) {
   const networkFee = parseFloat(quote?.fees?.network_fee_amount ?? '0');
   const transactionFee = parseFloat(quote?.fees?.transaction_fee_amount ?? '0');
   const totalFees = networkFee + transactionFee;
-  const total = parseFloat(quote?.source_amount ?? sourceAmount) + totalFees;
+  const subsidy = quote?.fees?.subsidy;
+  const feesConsumerPays = subsidy ? parseFloat(subsidy.total_fee_after_subsidization) : totalFees;
+  const total = parseFloat(quote?.source_amount ?? sourceAmount) + feesConsumerPays;
 
   if (walletVerifPhase === 'signing' && walletChallenge) {
     return (
@@ -279,7 +281,18 @@ export default function CheckoutScreen({ navigation, route }: Props) {
             <Text style={styles.quoteLabel}>Fees</Text>
             <Text style={styles.chevron}>{feesExpanded ? ' ▴' : ' ▾'}</Text>
           </View>
-          <Text style={styles.quoteValue}>{formatCurrency(totalFees, sourceCurrency)}</Text>
+          {subsidy ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.quoteValue, styles.feesStrikethrough]}>
+                {formatCurrency(totalFees, sourceCurrency)}
+              </Text>
+              <Text style={[styles.quoteValue, styles.feesSubsidized]}>
+                {' '}{formatCurrency(subsidy.total_fee_after_subsidization, sourceCurrency)}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.quoteValue}>{formatCurrency(totalFees, sourceCurrency)}</Text>
+          )}
         </TouchableOpacity>
         {feesExpanded && (
           <>
@@ -354,6 +367,8 @@ const styles = StyleSheet.create({
   quoteSub: { color: '#888', fontSize: 13, marginTop: 2 },
   quoteDivider: { height: 1, backgroundColor: '#1a1a1a', marginVertical: 10 },
   chevron: { color: '#888', fontSize: 12 },
+  feesStrikethrough: { color: '#666', textDecorationLine: 'line-through' },
+  feesSubsidized: { color: '#4ade80' },
   totalLabel: { color: '#fff', fontWeight: '700', fontSize: 16 },
   totalValue: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
