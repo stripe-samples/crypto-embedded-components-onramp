@@ -4,6 +4,12 @@ export type KycLevel = "REQUIRES_KYC" | "L0" | "L1" | "L2" | "REJECTED" | "PENDI
 
 export type KycRegion = "us" | "eu" | null;
 
+export type KycTier = {
+  tier: string;
+  verification_status: string;
+  verification_errors?: string[];
+};
+
 export type Verification = {
   name: string;
   status: "verified" | "pending" | "not_started" | "rejected";
@@ -12,7 +18,7 @@ export type Verification = {
 export type CustomerKycData = {
   kyc_level: KycLevel;
   kyc_region: KycRegion;
-  kyc_tiers: Array<{ tier: string; verification_status: string }>;
+  kyc_tiers: KycTier[];
   verifications: Verification[];
   provided_fields: string[];
 };
