@@ -29,9 +29,9 @@ import { Dayjs } from "dayjs";
 import type { KycInfo, CryptoNetwork, OnrampCoordinator, WalletOwnershipChallenge } from "@stripe/crypto";
 import { getTheme } from "./theme";
 import { LOCAL_LIMITS } from "./kycLimits";
-import { EXPLORER_URLS, getNetworks, getCurrenciesForNetwork, isEuCountry, EU_COUNTRIES } from "./shared";
+import { EXPLORER_URLS, getNetworks, getCurrenciesForNetwork, getUsKycCollectionStep, isEuCountry, EU_COUNTRIES } from "./shared";
 import { EU_COUNTRY_NAMES } from "./euIdentifiers";
-import type { AccountStatus, KycLevel, KycRegion, Wallet, OnrampSession, CheckoutError } from "./types";
+import type { AccountStatus, KycLevel, KycRegion, KycTier, Wallet, OnrampSession, CheckoutError } from "./types";
 import { EuKycStep } from "./EuKycStep";
 import { WalletOwnershipVerificationPanel } from "./WalletOwnershipVerificationPanel";
 
@@ -77,7 +77,7 @@ export type WizardViewProps = {
   onRefreshKycLevel: () => void;
   authenticating: boolean;
   currentKycTier: "L0" | "L1" | "L2" | null;
-  kycTiers: Array<{ tier: string; verification_status: string }>;
+  kycTiers: KycTier[];
   limitSource: "api" | "local";
   walletOwnershipVerification: boolean;
   log: (event: string, detail?: string) => void;
@@ -106,6 +106,7 @@ export type WizardViewProps = {
  * KYC screen content (step 1) by kycLevel:
  *   REQUIRES_KYC            → full L0 form (name, address, optional SSN/DOB)
  *   REJECTED + L1 verified  → document verification button (retry L2 docs)
+ *   REJECTED + L1 exhausted → live document fallback unless address verification failed
  *   REJECTED + L1 failed    → full L0 form (name, address, optional SSN/DOB)
  *   L0                      → L1 step-up form (SSN + DOB required)
  *   L1                      → L2 document verification button
@@ -822,31 +823,13 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
 
         const chip = KYC_CHIP[props.polling ? "PENDING" : props.kycLevel] ?? KYC_CHIP.REQUIRES_KYC;
 
-        // Inspect the L1 tier status to decide which sub-form to show when REJECTED.
-        // l1Verified: L1 passed; only L2 (doc check) failed → retry docs, not re-enter data.
-        const l1Verified = kycTiers.some(
-          (t) => t.tier === "l1" && t.verification_status === "verified",
+        const collectionStep = getUsKycCollectionStep(props.kycLevel, kycTiers, props.livemode);
+        const showFull = collectionStep === "personal_info";
+        const showStepUp = collectionStep === "sensitive_info";
+        const showVerify = collectionStep === "documents";
+        const isL2Fallback = showVerify && kycTiers.some(
+          (tier) => tier.tier === "l1" && tier.verification_status === "rejected",
         );
-        // l1NotAvailable: EU region users skip L0 and L1 entirely — both tiers are
-        // not_available. When REJECTED, there is no L1 data to re-enter, so go straight
-        // to the document verification button to retry L2.
-        const l1NotAvailable = kycTiers.some(
-          (t) => t.tier === "l1" && t.verification_status === "not_available",
-        );
-
-        // Full L0 form (name, address, optional SSN/DOB): new users, or REJECTED where L1
-        // itself failed (l1 was rejected/not_started, not verified or not_available).
-        const showFull =
-          props.kycLevel === "REQUIRES_KYC" ||
-          (props.kycLevel === "REJECTED" && !l1Verified && !l1NotAvailable);
-        // L1 step-up form (SSN + DOB required to advance from L0 → L1).
-        const showStepUp = props.kycLevel === "L0";
-        // Document verification button: user is at L1, or REJECTED but L1 was already
-        // verified or not_available (EU region) — only the L2 doc step needs to be retried.
-        const showVerify =
-          props.kycLevel === "L1" ||
-          (props.kycLevel === "REJECTED" && l1Verified) ||
-          (props.kycLevel === "REJECTED" && l1NotAvailable);
 
         return (
           <Stack spacing={3}>
@@ -1113,6 +1096,18 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
                   )}
                 </Button>
               </>
+            )}
+
+            {collectionStep === "blocked" && !props.polling && (
+              <Alert severity="error">
+                Verification could not be completed and the maximum number of attempts has been reached.
+              </Alert>
+            )}
+
+            {isL2Fallback && !props.polling && (
+              <Alert severity="info">
+                We couldn’t verify your personal information. Verify your identity with a photo ID and selfie to continue.
+              </Alert>
             )}
 
             {showVerify && !props.polling && (

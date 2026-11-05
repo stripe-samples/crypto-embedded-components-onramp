@@ -26,6 +26,7 @@ import type {
   AccountStatus,
   KycLevel,
   KycRegion,
+  KycTier,
   CheckoutError,
   FeeResponsibility,
 } from "./types";
@@ -122,7 +123,7 @@ const ExampleAppInner: React.FC<{
   );
   const [kycLevel, setKYCLevel] = useState<KycLevel>("REQUIRES_KYC");
   const [currentKycTier, setCurrentKycTier] = useState<"L0" | "L1" | "L2" | null>(null);
-  const [kycTiers, setKycTiers] = useState<Array<{ tier: string; verification_status: string }>>([]);
+  const [kycTiers, setKycTiers] = useState<KycTier[]>([]);
   const [limitSource, setLimitSource] = useState<"api" | "local">("api");
   // Who bears the transaction fees for sessions this app creates. "merchant" subsidizes
   // the consumer's fees — see fees.subsidy in the quote/session responses.
