@@ -25,5 +25,3 @@ export function createApp(options: AppOptions = {}): Express {
 
   return app;
 }
-
-export const app = createApp();

@@ -10,7 +10,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch src/server.ts",
-    "lint": "tsc -p tsconfig.json --noEmit --pretty false",
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",

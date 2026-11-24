@@ -19,7 +19,6 @@ Available commands:
 npm run dev
 npm run build
 npm run typecheck
-npm run lint
 npm test
 npm start
 ```
