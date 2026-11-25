@@ -3,31 +3,20 @@ import type Stripe from 'stripe';
 
 import type { AppConfig } from '../config.js';
 import { ApiError, upstreamApiError } from '../errors.js';
-import { createJwtService, type Mode } from '../jwt.js';
+import { createJwtService } from '../jwt.js';
 import {
   authorizeSession,
   type OAuthCredentialsInput,
 } from '../session-auth.js';
 import {
   isInvalidLinkAccessTokenError,
+  stripeClientForMode,
   stripeErrorCode,
   stripeStatusCode,
   type StripeFactory,
 } from '../stripe.js';
 import { parseCryptoCustomerId } from '../validation.js';
 import { retrieveOAuthCredentials } from './link.js';
-
-function stripeClient(
-  config: AppConfig,
-  mode: Mode,
-  stripeFactory: StripeFactory,
-): Stripe {
-  const selectedMode = mode === 'live' ? config.liveMode : config.testMode;
-  if (!selectedMode) {
-    throw upstreamApiError(new Error('Upstream mode is not configured.'));
-  }
-  return stripeFactory(selectedMode.secretKey);
-}
 
 function customerApiError(error: unknown): ApiError {
   if (isInvalidLinkAccessTokenError(error)) {
@@ -115,7 +104,7 @@ export function createCustomersRouter(
       request.get('Authorization'),
       cryptoCustomerId,
     );
-    const stripe = stripeClient(config, session.mode, stripeFactory);
+    const stripe = stripeClientForMode(config, session.mode, stripeFactory);
     const customer = await stripeRequest(() =>
       stripe.crypto.customers.retrieve(
         cryptoCustomerId,
@@ -138,7 +127,7 @@ export function createCustomersRouter(
       request.get('Authorization'),
       cryptoCustomerId,
     );
-    const stripe = stripeClient(config, session.mode, stripeFactory);
+    const stripe = stripeClientForMode(config, session.mode, stripeFactory);
     const wallets = await stripeRequest(() =>
       stripe.crypto.customers.listConsumerWallets(
         cryptoCustomerId,
@@ -156,7 +145,7 @@ export function createCustomersRouter(
       request.get('Authorization'),
       cryptoCustomerId,
     );
-    const stripe = stripeClient(config, session.mode, stripeFactory);
+    const stripe = stripeClientForMode(config, session.mode, stripeFactory);
     const paymentTokens = await stripeRequest(() =>
       stripe.crypto.customers.listPaymentTokens(
         cryptoCustomerId,
