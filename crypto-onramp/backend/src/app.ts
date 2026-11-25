@@ -1,7 +1,9 @@
 import cors from 'cors';
 import express, { type Express } from 'express';
 
+import { createCustomersRouter } from './routes/customers.js';
 import { createLinkRouter, getPublicConfig } from './routes/link.js';
+import { createOnrampRouter } from './routes/onramp.js';
 import type { AppConfig } from './config.js';
 import { ApiError, errorHandler } from './errors.js';
 import { createStripeClient, type StripeFactory } from './stripe.js';
@@ -22,6 +24,9 @@ export function createApp(
   const stripeFactory = overrides.stripeFactory ?? createStripeClient;
 
   app.disable('x-powered-by');
+  if (config.trustedProxyHops > 0) {
+    app.set('trust proxy', config.trustedProxyHops);
+  }
   app.use(
     cors({
       allowedHeaders: ['Authorization', 'Content-Type'],
@@ -43,6 +48,14 @@ export function createApp(
   app.use(
     '/link',
     createLinkRouter(config, fetchImplementation, stripeFactory),
+  );
+  app.use(
+    '/customers',
+    createCustomersRouter(config, fetchImplementation, stripeFactory),
+  );
+  app.use(
+    '/onramp',
+    createOnrampRouter(config, fetchImplementation, stripeFactory),
   );
 
   app.use((_request, _response, next) => {

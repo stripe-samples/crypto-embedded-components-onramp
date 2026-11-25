@@ -27,6 +27,7 @@ export interface AppConfig {
   oauthScopes: string;
   port: number;
   testMode: ModeConfig;
+  trustedProxyHops: number;
 }
 
 export class ConfigError extends Error {
@@ -63,6 +64,23 @@ function readPort(environment: Environment, errors: string[]): number {
     return DEFAULT_PORT;
   }
   return port;
+}
+
+function readTrustedProxyHops(
+  environment: Environment,
+  errors: string[],
+): number {
+  const rawHops = readOptional(environment, 'TRUSTED_PROXY_HOPS');
+  if (!rawHops) {
+    return readOptional(environment, 'VERCEL') === '1' ? 1 : 0;
+  }
+
+  const hops = Number(rawHops);
+  if (!Number.isInteger(hops) || hops < 0 || hops > 10) {
+    errors.push('TRUSTED_PROXY_HOPS must be an integer between 0 and 10');
+    return 0;
+  }
+  return hops;
 }
 
 function readCorsAllowedOrigins(environment: Environment): readonly string[] {
@@ -104,6 +122,7 @@ export function loadConfig(environment: Environment = process.env): AppConfig {
     oauthScopes: readRequired(environment, 'OAUTH_SCOPES', errors),
     port: readPort(environment, errors),
     testMode,
+    trustedProxyHops: readTrustedProxyHops(environment, errors),
   };
 
   if (livePublishableKey && liveSecretKey) {

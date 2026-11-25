@@ -15,6 +15,7 @@ export const testConfig: AppConfig = {
     publishableKey: 'pk_test_example',
     secretKey: 'sk_test_example',
   },
+  trustedProxyHops: 1,
 };
 
 export function jsonResponse(body: unknown, status = 200): Response {
@@ -64,19 +65,59 @@ export function createMockStripeFactory() {
         provided_fields: ['first_name'],
       }),
   );
+  const listConsumerWallets = vi.fn(async () => ({
+    object: 'list' as const,
+    data: [
+      {
+        id: 'ccw_example',
+        object: 'crypto.consumer_wallet' as const,
+        verified_ownership: true,
+      },
+    ],
+    has_more: true,
+    url: '/v1/crypto/customers/crc_example/crypto_consumer_wallets',
+  }));
+  const listPaymentTokens = vi.fn(async () => ({
+    object: 'list' as const,
+    data: [
+      {
+        id: 'cpt_example',
+        object: 'crypto.payment_token' as const,
+        type: 'card',
+      },
+    ],
+    has_more: false,
+    url: '/v1/crypto/customers/crc_example/payment_tokens',
+  }));
+  const retrieveTransactionLimits = vi.fn(async () => ({
+    object: 'crypto.onramp_transaction_limits' as const,
+    crypto_customer_id: 'crc_example',
+    limits: {
+      'usd.fiat': {
+        card: [{ limit: 300_000, settlement_speed: 'instant' }],
+      },
+    },
+    livemode: false,
+  }));
   const stripeFactory = vi.fn(
     () =>
       ({
         crypto: {
           customers: {
+            listConsumerWallets,
+            listPaymentTokens,
             retrieve: retrieveCustomer,
           },
+          onrampTransactionLimits: { retrieve: retrieveTransactionLimits },
         },
       }) as unknown as Stripe,
   );
 
   return {
+    listConsumerWallets,
+    listPaymentTokens,
     retrieveCustomer,
+    retrieveTransactionLimits,
     stripeFactory,
   };
 }

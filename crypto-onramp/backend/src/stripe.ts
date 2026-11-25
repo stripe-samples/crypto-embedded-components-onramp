@@ -19,6 +19,25 @@ export function stripeStatusCode(error: unknown): number | undefined {
     : undefined;
 }
 
+export function stripeErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+  if ('code' in error && typeof error.code === 'string') {
+    return error.code;
+  }
+  if (
+    'raw' in error &&
+    typeof error.raw === 'object' &&
+    error.raw !== null &&
+    'code' in error.raw &&
+    typeof error.raw.code === 'string'
+  ) {
+    return error.raw.code;
+  }
+  return undefined;
+}
+
 export function isInvalidLinkAccessTokenError(error: unknown): boolean {
   if (
     stripeStatusCode(error) !== 403 ||
