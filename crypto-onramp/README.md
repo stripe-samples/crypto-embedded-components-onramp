@@ -1,6 +1,6 @@
 # Crypto Onramp
 
-This directory will consolidate the web and Expo Crypto Onramp examples around one stateless, Link-only backend. The first implementation phase contains the backend skeleton and its automated test harness; the existing examples remain unchanged.
+This directory consolidates the web and Expo Crypto Onramp examples around one stateless, Link-only backend. The existing examples remain unchanged while they migrate to the shared contract.
 
 ## Backend setup
 
@@ -25,28 +25,63 @@ npm start
 
 ## Authentication model
 
-The completed backend will issue two signed credentials with separate purposes:
+The backend issues two signed credentials with separate purposes:
 
 - A 15-minute flow token will bind a backend-created Link auth intent to its completion request.
 - A 24-hour session token will authorize returning-user and protected API requests after Link consent and customer ownership have been verified.
 
-The session lifetime is intentionally bounded to one day. It preserves useful returning-user SSO while limiting exposure for a stateless credential that cannot be centrally invalidated. Native clients will store only the session token in platform-protected storage and remove it on logout or “not me”; every protected request will still re-check current Link authority. OAuth access and refresh tokens remain backend-only and request-local.
+The session lifetime is intentionally bounded to one day. It preserves useful returning-user SSO while limiting exposure for a stateless credential that cannot be centrally invalidated. Native clients store only the session token in platform-protected storage and remove it on logout or “not me”; every protected request still re-checks current Link authority. OAuth access and refresh tokens remain backend-only and request-local.
 
-The public API contract will use the route names below as implementation phases land:
+When OAuth access has expired, the backend makes one best-effort refresh attempt. It does not retry or coordinate refreshes across instances, so clients must recover from `link_reauthorization_required` by starting a new Link authorization flow.
+
+The public API contract uses these routes:
 
 ```text
 GET  /config
 POST /link/auth_intent
 POST /link/auth_intent/complete
 POST /link/auth_token
-GET  /customers/:customer_id
-GET  /customers/:customer_id/wallets
-GET  /customers/:customer_id/payment_tokens
-GET  /transaction_limits
-POST /onramp_sessions
-GET  /onramp_sessions/:session_id
-POST /onramp_sessions/:session_id/quote
-POST /onramp_sessions/:session_id/checkout
 ```
 
 No real credentials, network calls, or transactions are used by the automated tests.
+
+## Link authorization
+
+Create a backend-bound Link authorization flow with an email lookup and an optional boolean `livemode` value:
+
+```http
+POST /link/auth_intent
+Content-Type: application/json
+
+{"email":"person@example.com","livemode":false}
+```
+
+The response contains `auth_intent_id` and `flow_token`. Pass the raw `auth_intent_id` to the Stripe SDK. After the SDK returns a CryptoCustomer ID, complete the flow with the signed credential:
+
+```http
+POST /link/auth_intent/complete
+Authorization: Bearer <flow_token>
+Content-Type: application/json
+
+{"crypto_customer_id":"crc_example"}
+```
+
+The backend retrieves current Link OAuth credentials, verifies CryptoCustomer ownership, and returns only `session_token`. OAuth credentials never enter client responses or backend JWTs. Errors use this envelope:
+
+```json
+{"error":{"code":"invalid_flow_token","message":"The flow token is invalid or expired."}}
+```
+
+For explicit returning-user SSO, exchange the session credential for the short-lived SDK token:
+
+```http
+POST /link/auth_token
+Authorization: Bearer <session_token>
+Content-Type: application/json
+
+{}
+```
+
+The response contains only `link_auth_token_client_secret` and Stripe's `expires_in` value. Pass the client secret to the SDK token-authentication API, not its Link authorization API.
+
+Stripe enables seamless sign-in only for approved integrations. Add `auth.persist_login:read` to `OAUTH_SCOPES` only after Stripe enables it for your account. `/config` reports `link_sso_enabled`; clients should hide explicit SSO actions when it is false. `/link/auth_token` returns `link_sso_unavailable` when the scope is absent or Stripe refuses token creation, and clients should use the regular Link authorization flow.
