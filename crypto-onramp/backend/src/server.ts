@@ -8,7 +8,7 @@ import { createApp } from './app.js';
 import { loadConfig, type AppConfig } from './config.js';
 
 export function startServer(config: AppConfig = loadConfig()): Server {
-  const app = createApp({ corsAllowedOrigins: config.corsAllowedOrigins });
+  const app = createApp(config);
 
   return app.listen(config.port, config.host, () => {
     console.log(
