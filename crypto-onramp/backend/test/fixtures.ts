@@ -4,7 +4,6 @@ import { vi } from 'vitest';
 import type { AppConfig } from '../src/config.js';
 
 export const testConfig: AppConfig = {
-  corsAllowedOrigins: ['https://example.com'],
   host: '127.0.0.1',
   jwtSigningSecret: 'a-secure-signing-secret-with-32-bytes',
   oauthClientId: 'ca_test_example',

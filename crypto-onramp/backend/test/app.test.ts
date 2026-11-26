@@ -5,17 +5,15 @@ import { createApp } from '../src/create-app.js';
 import { testConfig } from './fixtures.js';
 
 describe('app', () => {
-  it('serves the health contract without external dependencies', async () => {
+  it('serves the health contract with unrestricted CORS', async () => {
     const app = createApp(testConfig);
     const response = await request(app)
       .get('/health')
-      .set('Origin', 'https://example.com');
+      .set('Origin', 'https://preview.example.com');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'ok' });
-    expect(response.headers['access-control-allow-origin']).toBe(
-      'https://example.com',
-    );
+    expect(response.headers['access-control-allow-origin']).toBe('*');
   });
 
   it('returns the stable error envelope for malformed JSON', async () => {
