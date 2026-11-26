@@ -19,7 +19,6 @@ export type CliViewProps = {
   accountStatus: AccountStatus;
   cryptoCustomerId: string | null | undefined;
   api: OnrampApi;
-  authenticated: boolean;
   kycLevel: KycLevel;
   cryptoPaymentToken: string | null | undefined;
   selectedWallet: string | null;
@@ -147,7 +146,7 @@ export const CliView: React.FC<CliViewProps> = (props) => {
   }, []);
 
   const fetchWallets = useCallback(async (): Promise<Wallet[]> => {
-    if (!props.cryptoCustomerId || !props.authenticated) return [];
+    if (!props.cryptoCustomerId) return [];
     try {
       const data = await props.api.listWallets(props.cryptoCustomerId);
       const wallets = data.data ?? [];
@@ -155,7 +154,7 @@ export const CliView: React.FC<CliViewProps> = (props) => {
       return wallets;
     } catch {}
     return [];
-  }, [props.api, props.authenticated, props.cryptoCustomerId]);
+  }, [props.api, props.cryptoCustomerId]);
 
   const pollSession = useCallback(
     async (sessionId: string) => {

@@ -438,7 +438,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // ─── Wallet fetch ─────────────────────────────────────
 
   const fetchWallets = useCallback(async (startingAfter?: string) => {
-    if (!cryptoCustomerId || !authenticated) return;
+    if (!cryptoCustomerId) return;
     if (startingAfter) {
       setLoadingMoreWallets(true);
     } else {
@@ -459,7 +459,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
     }
     setLoadingWallets(false);
     setLoadingMoreWallets(false);
-  }, [api, authenticated, cryptoCustomerId, setError]);
+  }, [api, cryptoCustomerId, setError]);
 
   useEffect(() => {
     if (step === 2) fetchWallets();

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -6,6 +6,7 @@ import {
   FormControlLabel,
   Stack,
   Switch,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -23,6 +24,8 @@ import { loadCryptoOnrampAndInitialize } from "@stripe/crypto";
 import { LinkAuthenticationModal } from "./LinkAuthenticationModal";
 import {
   ApiError,
+  type AuthSession,
+  decodeSessionToken,
   getPublicConfig,
   isAuthorizationRequiredError,
   OnrampApi,
@@ -47,17 +50,40 @@ function timestamp(): string {
 }
 
 export const ExampleApp: React.FC = () => {
-  const [onramp, setOnramp] = useState<OnrampCoordinator | null>(null);
+  const [initializedOnramp, setInitializedOnramp] = useState<{
+    coordinator: OnrampCoordinator;
+    darkMode: boolean;
+    livemode: boolean;
+  }>();
   const [initializationError, setInitializationError] = useState<Error>();
   const [initializationAttempt, setInitializationAttempt] = useState(0);
+  const [sessionToken, setActiveSessionToken] = useState<string>();
   const [darkMode, setDarkMode] = useState<boolean>(
     () =>
       new URLSearchParams(window.location.search).get("darkmode") === "true",
   );
-  const [livemode, setLivemode] = useState<boolean>(
+  const [selectedLivemode, setSelectedLivemode] = useState<boolean>(
     () =>
       new URLSearchParams(window.location.search).get("livemode") === "true",
   );
+  const authSession = useMemo(
+    () => (sessionToken ? decodeSessionToken(sessionToken) : undefined),
+    [sessionToken],
+  );
+  const livemode = authSession ? authSession.mode === "live" : selectedLivemode;
+
+  const setSessionToken = useCallback((token?: string) => {
+    if (token) {
+      const session = decodeSessionToken(token);
+      setSelectedLivemode(session.mode === "live");
+    }
+    setActiveSessionToken(token);
+  }, []);
+
+  const setLivemode = useCallback((value: boolean) => {
+    setActiveSessionToken(undefined);
+    setSelectedLivemode(value);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -76,7 +102,6 @@ export const ExampleApp: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    setOnramp(null);
     setInitializationError(undefined);
     getPublicConfig(livemode)
       .then(({ publishable_key: publishableKey }) => {
@@ -89,7 +114,9 @@ export const ExampleApp: React.FC = () => {
         }
       })
       .then((coordinator) => {
-        if (!cancelled) setOnramp(coordinator);
+        if (!cancelled && coordinator) {
+          setInitializedOnramp({ coordinator, darkMode, livemode });
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -135,7 +162,11 @@ export const ExampleApp: React.FC = () => {
     );
   }
 
-  if (!onramp) {
+  if (
+    !initializedOnramp ||
+    initializedOnramp.darkMode !== darkMode ||
+    initializedOnramp.livemode !== livemode
+  ) {
     return (
       <Box sx={{ p: 4 }}>
         <Typography>Loading...</Typography>
@@ -145,11 +176,14 @@ export const ExampleApp: React.FC = () => {
 
   return (
     <ExampleAppInner
-      onramp={onramp}
+      onramp={initializedOnramp.coordinator}
       darkMode={darkMode}
       setDarkMode={setDarkMode}
       livemode={livemode}
       setLivemode={setLivemode}
+      sessionToken={sessionToken}
+      setSessionToken={setSessionToken}
+      authSession={authSession}
     />
   );
 };
@@ -160,22 +194,47 @@ const ExampleAppInner: React.FC<{
   setDarkMode: (val: boolean) => void;
   livemode: boolean;
   setLivemode: (val: boolean) => void;
-}> = ({ onramp, darkMode, setDarkMode, livemode, setLivemode }) => {
+  sessionToken?: string;
+  setSessionToken: (token?: string) => void;
+  authSession?: AuthSession;
+}> = ({
+  onramp,
+  darkMode,
+  setDarkMode,
+  livemode,
+  setLivemode,
+  sessionToken,
+  setSessionToken,
+  authSession,
+}) => {
   const [viewMode, setViewMode] = useState<"form" | "cli">("form");
+  const [wizardKey, setWizardKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState(
     () => new URLSearchParams(window.location.search).get("email") ?? "",
   );
   const [authenticationElement, setAuthenticationElement] =
     useState<HTMLElement | null>(null);
+  const [sdkAuthStatus, setSdkAuthStatus] = useState<
+    "idle" | "authenticating" | "authenticated" | "failed"
+  >("idle");
+  const restoringAuthIntentId = useRef<string | undefined>(undefined);
   const [accountStatus, setAccountStatus] = useState<AccountStatus>("idle");
-  const [authenticated, setAuthenticated] = useState(false);
   const [authorizationRequired, setAuthorizationRequired] = useState(false);
   const [cryptoPaymentToken, setCryptoPaymentToken] = useState<string | null>();
-  const api = useMemo(
-    () => new OnrampApi(() => setAuthorizationRequired(true)),
-    [],
+  const [sessionTokenInput, setSessionTokenInput] = useState(
+    sessionToken ?? "",
   );
+  const api = useMemo(
+    () =>
+      new OnrampApi(sessionToken, () => setAuthorizationRequired(true)),
+    [sessionToken],
+  );
+  const authenticated =
+    authSession !== undefined && sdkAuthStatus === "authenticated";
+  const cryptoCustomerId = authenticated
+    ? authSession.cryptoCustomerId
+    : undefined;
   const [kycLevel, setKYCLevel] = useState<KycLevel>("REQUIRES_KYC");
   const [currentKycTier, setCurrentKycTier] = useState<"L0" | "L1" | "L2" | null>(null);
   const [kycTiers, setKycTiers] = useState<KycTier[]>([]);
@@ -185,9 +244,6 @@ const ExampleAppInner: React.FC<{
   const [feeResponsibility, setFeeResponsibility] = useState<FeeResponsibility>("consumer");
   const [kycRegion, setKycRegion] = useState<KycRegion>(null);
   const [providedFields, setProvidedFields] = useState<string[]>([]);
-  const [cryptoCustomerId, setCryptoCustomerId] = useState<
-    string | null | undefined
-  >(null);
   const [polling, setPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedWallet, setSelectedWallet] = useState<string | null>(null);
@@ -207,10 +263,8 @@ const ExampleAppInner: React.FC<{
   }, [email]);
 
   useEffect(() => {
-    api.clearSession();
-    setAuthenticated(false);
-    setCryptoCustomerId(null);
-  }, [api, livemode]);
+    setSessionTokenInput(sessionToken ?? "");
+  }, [sessionToken]);
 
   const log = useCallback((event: string, detail?: string) => {
     const time = timestamp();
@@ -234,6 +288,30 @@ const ExampleAppInner: React.FC<{
     },
     [log],
   );
+
+  const resetSessionState = useCallback(() => {
+    setWizardKey((key) => key + 1);
+    restoringAuthIntentId.current = undefined;
+    setSdkAuthStatus("idle");
+    setAuthenticationElement(null);
+    setAccountStatus("idle");
+    setAuthorizationRequired(false);
+    setCryptoPaymentToken(null);
+    setSelectedWallet(null);
+    setSelectedWalletNetwork(null);
+    setKYCLevel("REQUIRES_KYC");
+    setCurrentKycTier(null);
+    setKycTiers([]);
+    setKycRegion(null);
+    setProvidedFields([]);
+    setPolling(false);
+  }, []);
+
+  const clearSession = useCallback(() => {
+    setSessionToken();
+    setSessionTokenInput("");
+    resetSessionState();
+  }, [resetSessionState, setSessionToken]);
 
   const refreshKycLevel = useCallback(
     async (customerId: string, previousLevel?: string) => {
@@ -294,13 +372,17 @@ const ExampleAppInner: React.FC<{
     [api, log, surfaceError],
   );
 
-  const handleAuthenticate = useCallback(
-    async (authIntentId: string, flowToken: string) => {
-      log("Authenticating User...");
+  const authenticate = useCallback(
+    async (authIntentId: string, flowToken?: string) => {
+      log(
+        flowToken
+          ? "Authenticating user..."
+          : "Restoring Link authentication...",
+      );
+      setSdkAuthStatus("authenticating");
       setCryptoPaymentToken(null);
       setSelectedWallet(null);
       setSelectedWalletNetwork(null);
-      setCryptoCustomerId(null);
       try {
         const authenticateResult = await onramp.authenticate(
           authIntentId,
@@ -309,10 +391,16 @@ const ExampleAppInner: React.FC<{
               `Authentication result: ${result.result}. CryptoCustomerId: ${result.crypto_customer_id}`,
             );
             if (result.crypto_customer_id) {
-              await api.completeAuthIntent(flowToken, result.crypto_customer_id);
-              setCryptoCustomerId(result.crypto_customer_id);
-              setAuthenticated(true);
-              await refreshKycLevel(result.crypto_customer_id);
+              if (flowToken) {
+                const token = await api.completeAuthIntent(
+                  flowToken,
+                  result.crypto_customer_id,
+                );
+                setSessionToken(token);
+              }
+              setSdkAuthStatus("authenticated");
+            } else {
+              setSdkAuthStatus("failed");
             }
             setAuthenticationElement(null);
           },
@@ -321,23 +409,18 @@ const ExampleAppInner: React.FC<{
           setAuthenticationElement(authenticateResult);
         }
       } catch (e) {
+        setSdkAuthStatus("failed");
         surfaceError("Authentication error", e);
       }
     },
-    [api, log, onramp, refreshKycLevel, surfaceError],
+    [api, log, onramp, setSessionToken, surfaceError],
   );
 
   const handleCheckAccount = useCallback(
     async (_email: string, preserveError = false) => {
       setLoading(true);
       if (!preserveError) setError(null);
-      setAccountStatus("idle");
-      setAuthenticated(false);
-      api.clearSession();
-      setCryptoCustomerId(null);
-      setCryptoPaymentToken(null);
-      setSelectedWallet(null);
-      setSelectedWalletNetwork(null);
+      clearSession();
       log("hasLinkAccount", `email=${_email}`);
       try {
         log("Creating LinkAuthIntent", `email=${_email}`);
@@ -346,7 +429,7 @@ const ExampleAppInner: React.FC<{
           log(`Link account found for ${_email}`);
           setAccountStatus("exists");
           log("LinkAuthIntent created", `id=${authIntent.auth_intent_id}`);
-          await handleAuthenticate(
+          await authenticate(
             authIntent.auth_intent_id,
             authIntent.flow_token,
           );
@@ -365,7 +448,7 @@ const ExampleAppInner: React.FC<{
         setLoading(false);
       }
     },
-    [api, handleAuthenticate, livemode, log, surfaceError],
+    [api, authenticate, clearSession, livemode, log, surfaceError],
   );
 
   const handleRegister = useCallback(
@@ -391,7 +474,7 @@ const ExampleAppInner: React.FC<{
           const authIntent = await api.createAuthIntent(_email, livemode);
           log("LinkAuthIntent created", `id=${authIntent.auth_intent_id}`);
           setAccountStatus("exists");
-          await handleAuthenticate(
+          await authenticate(
             authIntent.auth_intent_id,
             authIntent.flow_token,
           );
@@ -402,15 +485,60 @@ const ExampleAppInner: React.FC<{
         setLoading(false);
       }
     },
-    [api, handleAuthenticate, log, onramp, livemode, surfaceError],
+    [api, authenticate, log, onramp, livemode, surfaceError],
   );
+
+  const handleUseSessionToken = useCallback(() => {
+    const token = sessionTokenInput.trim();
+    setError(null);
+    try {
+      const session = decodeSessionToken(token);
+      if (session.expiresAt <= Date.now()) {
+        throw new Error("Session token has expired.");
+      }
+      if (token === sessionToken && authenticated) {
+        log("Session token already active");
+        return;
+      }
+      resetSessionState();
+      setSessionToken(token);
+      log("Session token accepted");
+    } catch (e) {
+      surfaceError("Session token error", e);
+    }
+  }, [
+    authenticated,
+    log,
+    resetSessionState,
+    sessionToken,
+    sessionTokenInput,
+    setSessionToken,
+    surfaceError,
+  ]);
+
+  useEffect(() => {
+    if (
+      !authSession ||
+      sdkAuthStatus !== "idle" ||
+      restoringAuthIntentId.current === authSession.authIntentId
+    ) {
+      return;
+    }
+    restoringAuthIntentId.current = authSession.authIntentId;
+    void authenticate(authSession.authIntentId);
+  }, [authSession, authenticate, sdkAuthStatus]);
 
   useEffect(() => {
     if (!authorizationRequired) return;
-    setAuthorizationRequired(false);
+    clearSession();
     setError("Your Link authorization expired. Sign in again to continue.");
-    void handleCheckAccount(email, true);
-  }, [authorizationRequired, email, handleCheckAccount]);
+  }, [authorizationRequired, clearSession]);
+
+  useEffect(() => {
+    if (!cryptoCustomerId) return;
+    setAccountStatus("exists");
+    void refreshKycLevel(cryptoCustomerId);
+  }, [cryptoCustomerId, refreshKycLevel]);
 
   const handleSubmitKycInfo = useCallback(
     async (info: KycInfo) => {
@@ -420,7 +548,7 @@ const ExampleAppInner: React.FC<{
       try {
         await onramp.submitKycInfo(info);
         log("KYC submit result", "success");
-        if (cryptoCustomerId && authenticated) {
+        if (cryptoCustomerId) {
           await refreshKycLevel(cryptoCustomerId, kycLevel);
         }
       } catch (e) {
@@ -433,7 +561,6 @@ const ExampleAppInner: React.FC<{
       log,
       onramp,
       cryptoCustomerId,
-      authenticated,
       kycLevel,
       refreshKycLevel,
       surfaceError,
@@ -511,7 +638,7 @@ const ExampleAppInner: React.FC<{
     try {
       const result = await onramp.verifyDocuments();
       log("Verify documents result", result.result);
-      if (cryptoCustomerId && authenticated) {
+      if (cryptoCustomerId) {
         await refreshKycLevel(cryptoCustomerId, kycLevel);
       }
     } catch (e) {
@@ -521,7 +648,6 @@ const ExampleAppInner: React.FC<{
     }
   }, [
     cryptoCustomerId,
-    authenticated,
     kycLevel,
     log,
     onramp,
@@ -564,7 +690,7 @@ const ExampleAppInner: React.FC<{
 
   const handleAddFunds = useCallback(
     async (amount: string, destinationCurrency: string, sourceCurrency: string = "usd") => {
-      if (!cryptoCustomerId || !authenticated || !cryptoPaymentToken || !selectedWallet || !selectedWalletNetwork) return null;
+      if (!cryptoCustomerId || !cryptoPaymentToken || !selectedWallet || !selectedWalletNetwork) return null;
       setLoading(true);
       setError(null);
       log(
@@ -594,7 +720,6 @@ const ExampleAppInner: React.FC<{
     [
       log,
       api,
-      authenticated,
       cryptoCustomerId,
       cryptoPaymentToken,
       selectedWallet,
@@ -710,7 +835,13 @@ const ExampleAppInner: React.FC<{
             bgcolor: c.cardBg,
           }}
         >
-          <Stack direction="row" spacing={3} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={3}
+            alignItems="center"
+            useFlexGap
+            flexWrap="wrap"
+          >
             <FormControlLabel
               control={
                 <Switch
@@ -813,6 +944,35 @@ const ExampleAppInner: React.FC<{
                 </Typography>
               }
             />
+            <TextField
+              label="Session token"
+              value={sessionTokenInput}
+              onChange={(event) => setSessionTokenInput(event.target.value)}
+              size="small"
+              placeholder="eyJ..."
+              sx={{ ...t.inputSx, width: 320 }}
+            />
+            <Button
+              size="small"
+              disabled={
+                !sessionTokenInput.trim() ||
+                loading ||
+                (authenticated && sessionTokenInput.trim() === sessionToken)
+              }
+              onClick={handleUseSessionToken}
+              sx={{ color: c.accent, textTransform: "none" }}
+            >
+              Use session
+            </Button>
+            {sessionToken ? (
+              <Button
+                size="small"
+                onClick={clearSession}
+                sx={{ color: c.textSecondary, textTransform: "none" }}
+              >
+                Clear
+              </Button>
+            ) : null}
           </Stack>
         </Box>
       </Collapse>
@@ -821,6 +981,7 @@ const ExampleAppInner: React.FC<{
       <Box sx={{ p: 4 }}>
         {viewMode === "form" ? (
           <WizardView
+            key={wizardKey}
             darkMode={darkMode}
             email={email}
             setEmail={setEmail}
@@ -851,11 +1012,11 @@ const ExampleAppInner: React.FC<{
             onCheckout={handleCheckout}
             onSelectWallet={handleSelectWallet}
             onRefreshKycLevel={() => {
-              if (cryptoCustomerId && authenticated) {
+              if (cryptoCustomerId) {
                 refreshKycLevel(cryptoCustomerId);
               }
             }}
-            authenticating={!!authenticationElement}
+            authenticating={sdkAuthStatus === "authenticating"}
             currentKycTier={currentKycTier}
             kycTiers={kycTiers}
             limitSource={limitSource}
@@ -871,7 +1032,6 @@ const ExampleAppInner: React.FC<{
             accountStatus={accountStatus}
             cryptoCustomerId={cryptoCustomerId}
             api={api}
-            authenticated={authenticated}
             kycLevel={kycLevel}
             cryptoPaymentToken={cryptoPaymentToken}
             selectedWallet={selectedWallet}
@@ -895,7 +1055,12 @@ const ExampleAppInner: React.FC<{
         {authenticationElement ? (
           <LinkAuthenticationModal
             open={!!authenticationElement}
-            setOpen={() => setAuthenticationElement(null)}
+            setOpen={(open) => {
+              if (!open) {
+                setAuthenticationElement(null);
+                setSdkAuthStatus("failed");
+              }
+            }}
             element={authenticationElement}
           />
         ) : null}

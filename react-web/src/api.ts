@@ -25,6 +25,13 @@ type AuthIntent = {
   flow_token: string;
 };
 
+export type AuthSession = {
+  authIntentId: string;
+  cryptoCustomerId: string;
+  expiresAt: number;
+  mode: "test" | "live";
+};
+
 type ListResponse<T> = {
   data: T[];
   has_more: boolean;
@@ -67,6 +74,39 @@ export function isAuthorizationRequiredError(error: unknown): boolean {
   );
 }
 
+export function decodeSessionToken(sessionToken: string): AuthSession {
+  try {
+    const parts = sessionToken.split(".");
+    if (parts.length !== 3) throw new Error();
+
+    const payloadSegment = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(
+      atob(
+        payloadSegment.padEnd(Math.ceil(payloadSegment.length / 4) * 4, "="),
+      ),
+    ) as Record<string, unknown>;
+
+    if (
+      payload.token_type !== "session" ||
+      typeof payload.auth_intent_id !== "string" ||
+      typeof payload.crypto_customer_id !== "string" ||
+      (payload.mode !== "test" && payload.mode !== "live") ||
+      typeof payload.exp !== "number"
+    ) {
+      throw new Error();
+    }
+
+    return {
+      authIntentId: payload.auth_intent_id,
+      cryptoCustomerId: payload.crypto_customer_id,
+      expiresAt: payload.exp * 1000,
+      mode: payload.mode,
+    };
+  } catch {
+    throw new Error("Invalid session token.");
+  }
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -100,14 +140,12 @@ export function getPublicConfig(livemode: boolean): Promise<PublicConfig> {
 }
 
 export class OnrampApi {
-  private sessionToken?: string;
   private notifyingAuthorizationRequired = false;
 
-  constructor(private readonly onAuthorizationRequired: () => void) {}
-
-  clearSession(): void {
-    this.sessionToken = undefined;
-  }
+  constructor(
+    private readonly sessionToken: string | undefined,
+    private readonly onAuthorizationRequired: () => void,
+  ) {}
 
   async createAuthIntent(
     email: string,
@@ -122,7 +160,7 @@ export class OnrampApi {
   async completeAuthIntent(
     flowToken: string,
     cryptoCustomerId: string,
-  ): Promise<void> {
+  ): Promise<string> {
     const result = await request<{ session_token: string }>(
       "/link/auth_intent/complete",
       {
@@ -131,8 +169,7 @@ export class OnrampApi {
         method: "POST",
       },
     );
-    this.sessionToken = result.session_token;
-    this.notifyingAuthorizationRequired = false;
+    return result.session_token;
   }
 
   retrieveCustomer(customerId: string): Promise<RawCustomer> {
@@ -207,7 +244,6 @@ export class OnrampApi {
       return await request<T>(path, init, this.sessionToken);
     } catch (error) {
       if (isAuthorizationRequiredError(error)) {
-        this.clearSession();
         if (!this.notifyingAuthorizationRequired) {
           this.notifyingAuthorizationRequired = true;
           this.onAuthorizationRequired();
