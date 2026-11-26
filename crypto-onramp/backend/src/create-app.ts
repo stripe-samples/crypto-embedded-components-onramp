@@ -19,7 +19,6 @@ export function createApp(
   overrides: AppOverrides = {},
 ): Express {
   const app = express();
-  const allowedOrigins = [...config.corsAllowedOrigins];
   const fetchImplementation = overrides.fetch ?? globalThis.fetch;
   const stripeFactory = overrides.stripeFactory ?? createStripeClient;
 
@@ -27,13 +26,7 @@ export function createApp(
   if (config.trustedProxyHops > 0) {
     app.set('trust proxy', config.trustedProxyHops);
   }
-  app.use(
-    cors({
-      allowedHeaders: ['Authorization', 'Content-Type'],
-      methods: ['GET', 'POST'],
-      origin: allowedOrigins.length > 0 ? allowedOrigins : false,
-    }),
-  );
+  app.use(cors());
   app.use(express.json({ limit: '100kb' }));
 
   app.get('/health', (_request, response) => {

@@ -24,10 +24,6 @@ describe('loadConfig', () => {
     expect(config.port).toBe(3001);
     expect(config.trustedProxyHops).toBe(0);
     expect(config.liveMode).toBeUndefined();
-    expect(config.corsAllowedOrigins).toEqual([
-      'http://localhost:5173',
-      'http://localhost:8081',
-    ]);
     expect(FLOW_TOKEN_TTL_SECONDS).toBe(900);
     expect(SESSION_TOKEN_TTL_SECONDS).toBe(86_400);
   });

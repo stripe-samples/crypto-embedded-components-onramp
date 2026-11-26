@@ -5,10 +5,6 @@ export const JWT_AUDIENCE = 'crypto-onramp-clients';
 
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_PORT = 3001;
-const DEFAULT_CORS_ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:8081',
-] as const;
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -18,7 +14,6 @@ export interface ModeConfig {
 }
 
 export interface AppConfig {
-  corsAllowedOrigins: readonly string[];
   host: string;
   jwtSigningSecret: string;
   liveMode?: ModeConfig;
@@ -83,18 +78,6 @@ function readTrustedProxyHops(
   return hops;
 }
 
-function readCorsAllowedOrigins(environment: Environment): readonly string[] {
-  const configuredOrigins = readOptional(environment, 'CORS_ALLOWED_ORIGINS');
-  if (!configuredOrigins) {
-    return DEFAULT_CORS_ALLOWED_ORIGINS;
-  }
-
-  return configuredOrigins
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-}
-
 export function loadConfig(environment: Environment = process.env): AppConfig {
   const errors: string[] = [];
   const testMode = {
@@ -114,7 +97,6 @@ export function loadConfig(environment: Environment = process.env): AppConfig {
   }
 
   const config: AppConfig = {
-    corsAllowedOrigins: readCorsAllowedOrigins(environment),
     host: readOptional(environment, 'HOST') ?? DEFAULT_HOST,
     jwtSigningSecret,
     oauthClientId: readRequired(environment, 'OAUTH_CLIENT_ID', errors),
