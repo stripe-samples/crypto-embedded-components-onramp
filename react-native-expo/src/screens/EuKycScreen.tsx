@@ -5,7 +5,7 @@
  *   3. Attestation  — Terms of Service via presentUserAttestation()
  *   4. Verify Docs  — document + selfie via verifyIdentity()
  *
- * Mirrors the logic in react-web/src/EuKycStep.tsx using React Native UI
+ * Mirrors the logic in crypto-onramp/web/src/EuKycStep.tsx using React Native UI
  * and the RN SDK method names (requires @stripe/stripe-react-native >=0.70.0).
  */
 

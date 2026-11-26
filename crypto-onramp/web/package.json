@@ -17,7 +17,7 @@
     "start": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "dev": "concurrently \"npm --prefix ../crypto-onramp/backend run dev\" \"npm start\""
+    "dev": "concurrently \"npm --prefix ../backend run dev\" \"npm start\""
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
