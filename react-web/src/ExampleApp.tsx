@@ -48,6 +48,8 @@ function timestamp(): string {
 
 export const ExampleApp: React.FC = () => {
   const [onramp, setOnramp] = useState<OnrampCoordinator | null>(null);
+  const [initializationError, setInitializationError] = useState<Error>();
+  const [initializationAttempt, setInitializationAttempt] = useState(0);
   const [darkMode, setDarkMode] = useState<boolean>(
     () =>
       new URLSearchParams(window.location.search).get("darkmode") === "true",
@@ -73,7 +75,9 @@ export const ExampleApp: React.FC = () => {
   }, [darkMode, livemode]);
 
   useEffect(() => {
+    let cancelled = false;
     setOnramp(null);
+    setInitializationError(undefined);
     getPublicConfig(livemode)
       .then(({ publishable_key: publishableKey }) => {
         if (darkMode) {
@@ -84,8 +88,52 @@ export const ExampleApp: React.FC = () => {
           return loadCryptoOnrampAndInitialize(publishableKey);
         }
       })
-      .then(setOnramp);
-  }, [darkMode, livemode]);
+      .then((coordinator) => {
+        if (!cancelled) setOnramp(coordinator);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setInitializationError(
+            error instanceof Error
+              ? error
+              : new Error("Unable to initialize Crypto Onramp."),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [darkMode, initializationAttempt, livemode]);
+
+  if (initializationError) {
+    const liveModeUnavailable =
+      livemode &&
+      initializationError instanceof ApiError &&
+      initializationError.code === "mode_not_available";
+
+    return (
+      <Stack spacing={2} sx={{ p: 4, alignItems: "flex-start" }}>
+        <Typography variant="h6">Unable to initialize Crypto Onramp</Typography>
+        <Typography>
+          {liveModeUnavailable
+            ? "Live mode isn't configured for this backend."
+            : initializationError.message}
+        </Typography>
+        <Button
+          variant="contained"
+          onClick={() => {
+            if (liveModeUnavailable) {
+              setLivemode(false);
+            } else {
+              setInitializationAttempt((attempt) => attempt + 1);
+            }
+          }}
+        >
+          {liveModeUnavailable ? "Use test mode" : "Retry"}
+        </Button>
+      </Stack>
+    );
+  }
 
   if (!onramp) {
     return (
