@@ -99,6 +99,37 @@ export function createMockStripeFactory() {
     },
     livemode: false,
   }));
+  const onrampSession = () => ({
+    client_secret: 'cos_example_secret_example',
+    created: 1_795_555_200,
+    crypto_customer_id: 'crc_example',
+    id: 'cos_example',
+    kyc_details_provided: true,
+    livemode: false,
+    metadata: null,
+    object: 'crypto.onramp_session' as const,
+    redirect_url: null,
+    status: 'requires_payment',
+    transaction_details: {
+      destination_amount: '1.0',
+      destination_currencies: ['eth'],
+      destination_currency: 'eth',
+      destination_network: 'ethereum',
+      destination_networks: ['ethereum'],
+      fees: null,
+      lock_wallet_address: true,
+      quote_expiration: 1_795_555_500,
+      source_amount: '100',
+      source_currency: 'usd',
+      transaction_id: null,
+      wallet_address: '0x1234',
+      wallet_addresses: null,
+    },
+  });
+  const createOnrampSession = vi.fn(async () => onrampSession());
+  const retrieveOnrampSession = vi.fn(async () => onrampSession());
+  const quoteOnrampSession = vi.fn(async () => onrampSession());
+  const checkoutOnrampSession = vi.fn(async () => onrampSession());
   const stripeFactory = vi.fn(
     () =>
       ({
@@ -108,15 +139,25 @@ export function createMockStripeFactory() {
             listPaymentTokens,
             retrieve: retrieveCustomer,
           },
+          onrampSessions: {
+            checkout: checkoutOnrampSession,
+            create: createOnrampSession,
+            quote: quoteOnrampSession,
+            retrieve: retrieveOnrampSession,
+          },
           onrampTransactionLimits: { retrieve: retrieveTransactionLimits },
         },
       }) as unknown as Stripe,
   );
 
   return {
+    checkoutOnrampSession,
+    createOnrampSession,
     listConsumerWallets,
     listPaymentTokens,
+    quoteOnrampSession,
     retrieveCustomer,
+    retrieveOnrampSession,
     retrieveTransactionLimits,
     stripeFactory,
   };

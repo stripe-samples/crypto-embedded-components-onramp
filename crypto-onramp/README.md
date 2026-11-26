@@ -47,6 +47,10 @@ GET  /customers/:customer_id
 GET  /customers/:customer_id/wallets
 GET  /customers/:customer_id/payment_tokens
 GET  /onramp/limits
+POST /onramp/sessions
+GET  /onramp/sessions/:session_id
+POST /onramp/sessions/:session_id/quote
+POST /onramp/sessions/:session_id/checkout
 ```
 
 No real credentials, network calls, or transactions are used by the automated tests.
@@ -117,3 +121,26 @@ Authorization: Bearer <session_token>
 ```
 
 Use the returned Stripe limits as authoritative. Numeric limit values are passed through without unit conversion; the backend does not infer limits from KYC tier or add transaction ceilings.
+
+## Purchase flow
+
+Create a headless onramp session using the signed customer and mode. The backend derives `ui_mode` and client IP; callers provide only purchase inputs:
+
+```http
+POST /onramp/sessions
+Authorization: Bearer <session_token>
+Content-Type: application/json
+
+{"crypto_customer_id":"crc_example","payment_token":"cpt_example","wallet_address":"0x1234","source_amount":"100","source_currency":"usd","destination_currency":"eth","destination_network":"ethereum"}
+```
+
+`settlement_speed` and `fee_responsibility` are optional. The create, retrieve, quote, and checkout routes preserve Stripe's onramp-session response. Clients pass the checkout response's `client_secret` to the Stripe SDK and can inspect `transaction_details` for recoverable requirements such as wallet ownership verification:
+
+```http
+GET  /onramp/sessions/cos_example
+POST /onramp/sessions/cos_example/quote
+POST /onramp/sessions/cos_example/checkout
+Authorization: Bearer <session_token>
+```
+
+Retrieve, quote, and checkout verify that the session belongs to the customer and mode in the signed session credential. Quote and checkout perform an ownership preflight before the mutation.

@@ -3,6 +3,7 @@ import { ApiError } from './errors.js';
 const UNSAFE_PATH_SEGMENT = /[/?#%\\]|\.\./;
 const LINK_AUTH_INTENT_ID = /^lai_[A-Za-z0-9]+$/;
 const CRYPTO_CUSTOMER_ID = /^crc_[A-Za-z0-9]+$/;
+const ONRAMP_SESSION_ID = /^cos_[A-Za-z0-9]+$/;
 const MAX_ID_LENGTH = 255;
 const MAX_EMAIL_LENGTH = 800;
 
@@ -51,6 +52,10 @@ export function parseLinkAuthIntentId(value: unknown): string {
 
 export function parseCryptoCustomerId(value: unknown): string {
   return parseIdentifier(value, CRYPTO_CUSTOMER_ID, 'crypto_customer_id');
+}
+
+export function parseOnrampSessionId(value: unknown): string {
+  return parseIdentifier(value, ONRAMP_SESSION_ID, 'session_id');
 }
 
 export function parseEmail(value: unknown): string {
