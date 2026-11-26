@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -6,7 +6,6 @@ import {
   FormControlLabel,
   Stack,
   Switch,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -22,6 +21,8 @@ import type {
 } from "@stripe/crypto";
 import { loadCryptoOnrampAndInitialize } from "@stripe/crypto";
 import { LinkAuthenticationModal } from "./LinkAuthenticationModal";
+import { ApiError, getPublicConfig, OnrampApi } from "./api";
+import { customerKycData } from "./customer";
 import type {
   AccountStatus,
   KycLevel,
@@ -68,9 +69,8 @@ export const ExampleApp: React.FC = () => {
 
   useEffect(() => {
     setOnramp(null);
-    fetch(`/api/config?livemode=${livemode}`)
-      .then((res) => res.json())
-      .then(({ publishableKey }) => {
+    getPublicConfig(livemode)
+      .then(({ publishable_key: publishableKey }) => {
         if (darkMode) {
           return loadCryptoOnrampAndInitialize(publishableKey, {
             theme: "night",
@@ -116,11 +116,9 @@ const ExampleAppInner: React.FC<{
   const [authenticationElement, setAuthenticationElement] =
     useState<HTMLElement | null>(null);
   const [accountStatus, setAccountStatus] = useState<AccountStatus>("idle");
-  const [linkAuthIntentId, setLinkAuthIntentId] = useState<string | null>();
+  const [authenticated, setAuthenticated] = useState(false);
   const [cryptoPaymentToken, setCryptoPaymentToken] = useState<string | null>();
-  const [settingsLai, setSettingsLai] = useState<string | null>(
-    () => new URLSearchParams(window.location.search).get("lai") ?? null,
-  );
+  const api = useMemo(() => new OnrampApi(), []);
   const [kycLevel, setKYCLevel] = useState<KycLevel>("REQUIRES_KYC");
   const [currentKycTier, setCurrentKycTier] = useState<"L0" | "L1" | "L2" | null>(null);
   const [kycTiers, setKycTiers] = useState<KycTier[]>([]);
@@ -147,13 +145,15 @@ const ExampleAppInner: React.FC<{
     } else {
       params.delete("email");
     }
-    if (settingsLai) {
-      params.set("lai", settingsLai);
-    } else {
-      params.delete("lai");
-    }
+    params.delete("lai");
     window.history.replaceState(null, "", `?${params.toString()}`);
-  }, [email, settingsLai]);
+  }, [email]);
+
+  useEffect(() => {
+    api.clearSession();
+    setAuthenticated(false);
+    setCryptoCustomerId(null);
+  }, [api, livemode]);
 
   const log = useCallback((event: string, detail?: string) => {
     const time = timestamp();
@@ -178,7 +178,7 @@ const ExampleAppInner: React.FC<{
   );
 
   const refreshKycLevel = useCallback(
-    async (customerId: string, lai: string, previousLevel?: string) => {
+    async (customerId: string, previousLevel?: string) => {
       const terminalStates = new Set([
         "REQUIRES_KYC",
         "L0",
@@ -197,18 +197,7 @@ const ExampleAppInner: React.FC<{
       log("Polling KYC level...");
       try {
         while (true) {
-          const response = await fetch(
-            `/api/crypto/customers/${customerId}?email=${encodeURIComponent(email)}&lai=${lai}&livemode=${livemode}`,
-          );
-          if (!response.ok) {
-            const data = await response.json().catch(() => null);
-            surfaceError(
-              "KYC check failed",
-              data?.error ?? `HTTP ${response.status}`,
-            );
-            break;
-          }
-          const json = await response.json();
+          const json = customerKycData(await api.retrieveCustomer(customerId));
           const level = json.kyc_level;
           if (json.kyc_region !== undefined) {
             setKycRegion(json.kyc_region);
@@ -244,11 +233,11 @@ const ExampleAppInner: React.FC<{
         setPolling(false);
       }
     },
-    [email, livemode, log, surfaceError],
+    [api, log, surfaceError],
   );
 
   const handleAuthenticate = useCallback(
-    async (lai: string) => {
+    async (authIntentId: string, flowToken: string) => {
       log("Authenticating User...");
       setCryptoPaymentToken(null);
       setSelectedWallet(null);
@@ -256,14 +245,16 @@ const ExampleAppInner: React.FC<{
       setCryptoCustomerId(null);
       try {
         const authenticateResult = await onramp.authenticate(
-          lai,
+          authIntentId,
           async (result) => {
             log(
               `Authentication result: ${result.result}. CryptoCustomerId: ${result.crypto_customer_id}`,
             );
-            setCryptoCustomerId(result.crypto_customer_id);
             if (result.crypto_customer_id) {
-              await refreshKycLevel(result.crypto_customer_id, lai);
+              await api.completeAuthIntent(flowToken, result.crypto_customer_id);
+              setCryptoCustomerId(result.crypto_customer_id);
+              setAuthenticated(true);
+              await refreshKycLevel(result.crypto_customer_id);
             }
             setAuthenticationElement(null);
           },
@@ -275,7 +266,7 @@ const ExampleAppInner: React.FC<{
         surfaceError("Authentication error", e);
       }
     },
-    [log, onramp, refreshKycLevel, surfaceError],
+    [api, log, onramp, refreshKycLevel, surfaceError],
   );
 
   const handleCheckAccount = useCallback(
@@ -283,41 +274,32 @@ const ExampleAppInner: React.FC<{
       setLoading(true);
       setError(null);
       setAccountStatus("idle");
-      setLinkAuthIntentId(null);
+      setAuthenticated(false);
+      api.clearSession();
+      setCryptoCustomerId(null);
+      setCryptoPaymentToken(null);
+      setSelectedWallet(null);
+      setSelectedWalletNetwork(null);
       log("hasLinkAccount", `email=${_email}`);
       try {
-        let lai: string | null = null;
-        if (settingsLai) {
-          log(`Using LinkAuthIntent Id from settings: ${settingsLai}`);
-          lai = settingsLai;
-        } else {
-          const laiResponse = await fetch("/api/link_auth_intent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: _email, livemode }),
-          });
-          log("Creating LinkAuthIntent", `email=${_email}`);
-          if (laiResponse.ok) {
-            log(`Link account found for ${_email}`);
-            const laiResponseJSON = await laiResponse.json();
-            lai = laiResponseJSON.id;
-            log("LinkAuthIntent created", `id=${laiResponseJSON.id}`);
-          } else if (laiResponse.status === 404) {
+        log("Creating LinkAuthIntent", `email=${_email}`);
+        try {
+          const authIntent = await api.createAuthIntent(_email, livemode);
+          log(`Link account found for ${_email}`);
+          setAccountStatus("exists");
+          log("LinkAuthIntent created", `id=${authIntent.auth_intent_id}`);
+          await handleAuthenticate(
+            authIntent.auth_intent_id,
+            authIntent.flow_token,
+          );
+        } catch (error) {
+          if (error instanceof ApiError && error.code === "link_account_not_found") {
             log(`Link account not found for ${_email}`);
             setAccountStatus("not_found");
           } else {
-            const data = await laiResponse.json().catch(() => null);
             setAccountStatus("not_found");
-            surfaceError(
-              "Login failed",
-              data?.error ?? `HTTP ${laiResponse.status}`,
-            );
+            throw error;
           }
-        }
-        if (lai) {
-          setLinkAuthIntentId(lai);
-          setAccountStatus("exists");
-          await handleAuthenticate(lai);
         }
       } catch (e) {
         surfaceError("Login error", e);
@@ -325,7 +307,7 @@ const ExampleAppInner: React.FC<{
         setLoading(false);
       }
     },
-    [log, settingsLai, livemode, handleAuthenticate, surfaceError],
+    [api, handleAuthenticate, livemode, log, surfaceError],
   );
 
   const handleRegister = useCallback(
@@ -348,23 +330,13 @@ const ExampleAppInner: React.FC<{
 
         if (response.created) {
           log("Creating LinkAuthIntent", `email=${_email}`);
-          const laiResponse = await fetch("/api/link_auth_intent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: _email, livemode }),
-          });
-          if (laiResponse.ok) {
-            const laiResponseJSON = await laiResponse.json();
-            setLinkAuthIntentId(laiResponseJSON.id);
-            log("LinkAuthIntent created", `id=${laiResponseJSON.id}`);
-          } else {
-            const data = await laiResponse.json().catch(() => null);
-            surfaceError(
-              "Registration failed",
-              data?.error ?? `HTTP ${laiResponse.status}`,
-            );
-          }
+          const authIntent = await api.createAuthIntent(_email, livemode);
+          log("LinkAuthIntent created", `id=${authIntent.auth_intent_id}`);
           setAccountStatus("exists");
+          await handleAuthenticate(
+            authIntent.auth_intent_id,
+            authIntent.flow_token,
+          );
         }
       } catch (e) {
         surfaceError("Registration error", e);
@@ -372,8 +344,16 @@ const ExampleAppInner: React.FC<{
         setLoading(false);
       }
     },
-    [log, onramp, livemode, surfaceError],
+    [api, handleAuthenticate, log, onramp, livemode, surfaceError],
   );
+
+  useEffect(() => {
+    api.setAuthorizationRequiredHandler(() => {
+      setError("Your Link authorization expired. Sign in again to continue.");
+      void handleCheckAccount(email);
+    });
+    return () => api.setAuthorizationRequiredHandler();
+  }, [api, email, handleCheckAccount]);
 
   const handleSubmitKycInfo = useCallback(
     async (info: KycInfo) => {
@@ -383,8 +363,8 @@ const ExampleAppInner: React.FC<{
       try {
         await onramp.submitKycInfo(info);
         log("KYC submit result", "success");
-        if (cryptoCustomerId && linkAuthIntentId) {
-          await refreshKycLevel(cryptoCustomerId, linkAuthIntentId, kycLevel);
+        if (cryptoCustomerId && authenticated) {
+          await refreshKycLevel(cryptoCustomerId, kycLevel);
         }
       } catch (e) {
         surfaceError("KYC submission error", e);
@@ -396,7 +376,7 @@ const ExampleAppInner: React.FC<{
       log,
       onramp,
       cryptoCustomerId,
-      linkAuthIntentId,
+      authenticated,
       kycLevel,
       refreshKycLevel,
       surfaceError,
@@ -474,8 +454,8 @@ const ExampleAppInner: React.FC<{
     try {
       const result = await onramp.verifyDocuments();
       log("Verify documents result", result.result);
-      if (cryptoCustomerId && linkAuthIntentId) {
-        await refreshKycLevel(cryptoCustomerId, linkAuthIntentId, kycLevel);
+      if (cryptoCustomerId && authenticated) {
+        await refreshKycLevel(cryptoCustomerId, kycLevel);
       }
     } catch (e) {
       surfaceError("Identity verification error", e);
@@ -484,7 +464,7 @@ const ExampleAppInner: React.FC<{
     }
   }, [
     cryptoCustomerId,
-    linkAuthIntentId,
+    authenticated,
     kycLevel,
     log,
     onramp,
@@ -501,19 +481,7 @@ const ExampleAppInner: React.FC<{
         const result = await onramp.performCheckout(
           sessionId,
           async (onrampSessionId: string) => {
-            const response = await fetch(
-              `/api/crypto/onramp_sessions/${onrampSessionId}/checkout`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ lai: linkAuthIntentId, livemode }),
-              },
-            );
-            const data = await response.json();
-            if (!response.ok) {
-              const msg = data?.error?.message ?? data?.error ?? JSON.stringify(data);
-              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-            }
+            const data = await api.checkoutSession(onrampSessionId);
             if (data.transaction_details?.last_error === 'wallet_ownership_verification_required') {
               throw new Error('wallet_ownership_verification_required');
             }
@@ -534,12 +502,12 @@ const ExampleAppInner: React.FC<{
         setLoading(false);
       }
     },
-    [log, onramp, linkAuthIntentId, livemode, surfaceError],
+    [api, log, onramp, surfaceError],
   );
 
   const handleAddFunds = useCallback(
     async (amount: string, destinationCurrency: string, sourceCurrency: string = "usd") => {
-      if (!cryptoCustomerId || !linkAuthIntentId) return;
+      if (!cryptoCustomerId || !authenticated || !cryptoPaymentToken || !selectedWallet || !selectedWalletNetwork) return null;
       setLoading(true);
       setError(null);
       log(
@@ -547,12 +515,7 @@ const ExampleAppInner: React.FC<{
         `amount=$${amount}, currency=${destinationCurrency}, source=${sourceCurrency}`,
       );
       try {
-        const response = await fetch("/api/crypto/onramp_sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lai: linkAuthIntentId,
-            livemode,
+        const data = await api.createSession({
             crypto_customer_id: cryptoCustomerId,
             payment_token: cryptoPaymentToken,
             source_currency: sourceCurrency,
@@ -561,16 +524,9 @@ const ExampleAppInner: React.FC<{
             wallet_address: selectedWallet,
             destination_network: selectedWalletNetwork,
             ...(feeResponsibility === "merchant" ? { fee_responsibility: "merchant" } : {}),
-          }),
         });
-        const data = await response.json();
-        if (response.ok) {
-          log("Onramp session created", `id=${data.id}`);
-          return data;
-        } else {
-          surfaceError("Add funds failed", data?.error ?? JSON.stringify(data));
-          return null;
-        }
+        log("Onramp session created", `id=${data.id}`);
+        return data;
       } catch (e) {
         surfaceError("Add funds error", e);
         return null;
@@ -580,9 +536,9 @@ const ExampleAppInner: React.FC<{
     },
     [
       log,
-      livemode,
+      api,
+      authenticated,
       cryptoCustomerId,
-      linkAuthIntentId,
       cryptoPaymentToken,
       selectedWallet,
       selectedWalletNetwork,
@@ -800,14 +756,6 @@ const ExampleAppInner: React.FC<{
                 </Typography>
               }
             />
-            <TextField
-              label="LAI Override"
-              value={settingsLai ?? ""}
-              onChange={(e) => setSettingsLai(e.target.value || null)}
-              size="small"
-              placeholder="lai_..."
-              sx={{ ...t.inputSx, width: 260 }}
-            />
           </Stack>
         </Box>
       </Collapse>
@@ -823,7 +771,8 @@ const ExampleAppInner: React.FC<{
             setError={setError}
             accountStatus={accountStatus}
             cryptoCustomerId={cryptoCustomerId}
-            linkAuthIntentId={linkAuthIntentId}
+            api={api}
+            authenticated={authenticated}
             kycLevel={kycLevel}
             kycRegion={kycRegion}
             providedFields={providedFields}
@@ -834,7 +783,6 @@ const ExampleAppInner: React.FC<{
             loading={loading}
             polling={polling}
             livemode={livemode}
-            settingsLai={settingsLai}
             onCheckAccount={handleCheckAccount}
             onRegister={handleRegister}
             onSubmitKycInfo={handleSubmitKycInfo}
@@ -846,8 +794,8 @@ const ExampleAppInner: React.FC<{
             onCheckout={handleCheckout}
             onSelectWallet={handleSelectWallet}
             onRefreshKycLevel={() => {
-              if (cryptoCustomerId && linkAuthIntentId) {
-                refreshKycLevel(cryptoCustomerId, linkAuthIntentId);
+              if (cryptoCustomerId && authenticated) {
+                refreshKycLevel(cryptoCustomerId);
               }
             }}
             authenticating={!!authenticationElement}
@@ -865,7 +813,8 @@ const ExampleAppInner: React.FC<{
             setError={setError}
             accountStatus={accountStatus}
             cryptoCustomerId={cryptoCustomerId}
-            linkAuthIntentId={linkAuthIntentId}
+            api={api}
+            authenticated={authenticated}
             kycLevel={kycLevel}
             cryptoPaymentToken={cryptoPaymentToken}
             selectedWallet={selectedWallet}
@@ -873,7 +822,6 @@ const ExampleAppInner: React.FC<{
             loading={loading}
             polling={polling}
             livemode={livemode}
-            settingsLai={settingsLai}
             onCheckAccount={handleCheckAccount}
             onRegister={handleRegister}
             onSubmitKycInfo={handleSubmitKycInfo}

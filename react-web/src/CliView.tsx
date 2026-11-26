@@ -4,6 +4,7 @@ import type { KycInfo, CryptoNetwork, CryptoConsumerWallet } from "@stripe/crypt
 import type { CheckoutError } from "./types";
 import { getNetworks, getExplorerUrl } from "./shared";
 import type { AccountStatus, KycLevel, Wallet, OnrampSession } from "./types";
+import type { OnrampApi } from "./api";
 
 type OutputLine = {
   text: string;
@@ -17,7 +18,8 @@ export type CliViewProps = {
   setError: (error: string | null) => void;
   accountStatus: AccountStatus;
   cryptoCustomerId: string | null | undefined;
-  linkAuthIntentId: string | null | undefined;
+  api: OnrampApi;
+  authenticated: boolean;
   kycLevel: KycLevel;
   cryptoPaymentToken: string | null | undefined;
   selectedWallet: string | null;
@@ -25,7 +27,6 @@ export type CliViewProps = {
   loading: boolean;
   polling: boolean;
   livemode: boolean;
-  settingsLai: string | null;
   onCheckAccount: (email: string) => Promise<void>;
   onRegister: (
     email: string,
@@ -146,20 +147,15 @@ export const CliView: React.FC<CliViewProps> = (props) => {
   }, []);
 
   const fetchWallets = useCallback(async (): Promise<Wallet[]> => {
-    if (!props.cryptoCustomerId || !props.linkAuthIntentId) return [];
+    if (!props.cryptoCustomerId || !props.authenticated) return [];
     try {
-      const res = await fetch(
-        `/api/crypto/customers/${props.cryptoCustomerId}/wallets?lai=${encodeURIComponent(props.linkAuthIntentId)}&livemode=${props.livemode}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const w = data.data ?? [];
-        setWallets(w);
-        return w;
-      }
+      const data = await props.api.listWallets(props.cryptoCustomerId);
+      const wallets = data.data ?? [];
+      setWallets(wallets);
+      return wallets;
     } catch {}
     return [];
-  }, [props.cryptoCustomerId, props.linkAuthIntentId, props.livemode]);
+  }, [props.api, props.authenticated, props.cryptoCustomerId]);
 
   const pollSession = useCallback(
     async (sessionId: string) => {
@@ -172,10 +168,7 @@ export const CliView: React.FC<CliViewProps> = (props) => {
       print("Polling transaction status...", "gray");
       while (true) {
         try {
-          const res = await fetch(
-            `/api/crypto/onramp_sessions/${sessionId}?livemode=${props.livemode}`,
-          );
-          const data = await res.json();
+          const data = await props.api.retrieveSession(sessionId);
           if (terminalStatuses.has(data.status)) {
             if (data.status === "fulfillment_complete") {
               print("Transaction complete!", "green");
@@ -202,7 +195,7 @@ export const CliView: React.FC<CliViewProps> = (props) => {
         await new Promise((r) => setTimeout(r, 2000));
       }
     },
-    [props.livemode, props.selectedWalletNetwork, print],
+    [props.api, props.livemode, props.selectedWalletNetwork, print],
   );
 
   const executeCommand = useCallback(
