@@ -1,5 +1,9 @@
 import Stripe from 'stripe';
 
+import type { AppConfig } from './config.js';
+import { upstreamApiError } from './errors.js';
+import type { Mode } from './jwt.js';
+
 export const STRIPE_API_VERSION = `${Stripe.API_VERSION};crypto_onramp_beta=v2` as Stripe.LatestApiVersion;
 
 export type StripeFactory = (secretKey: string) => Stripe;
@@ -8,6 +12,18 @@ export function createStripeClient(secretKey: string): Stripe {
   return new Stripe(secretKey, {
     apiVersion: STRIPE_API_VERSION,
   });
+}
+
+export function stripeClientForMode(
+  config: AppConfig,
+  mode: Mode,
+  stripeFactory: StripeFactory,
+): Stripe {
+  const selectedMode = mode === 'live' ? config.liveMode : config.testMode;
+  if (!selectedMode) {
+    throw upstreamApiError(new Error('Upstream mode is not configured.'));
+  }
+  return stripeFactory(selectedMode.secretKey);
 }
 
 export function stripeStatusCode(error: unknown): number | undefined {
