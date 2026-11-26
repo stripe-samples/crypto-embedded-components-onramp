@@ -13,6 +13,8 @@ npm run dev
 
 The backend listens on `http://localhost:3001` by default. `GET /health` returns a synthetic readiness response and does not call Stripe or Link.
 
+Vercel deployments automatically trust one proxy hop so transaction-limit requests send Stripe the client IP rather than the proxy IP. Other environments trust no forwarded client IP headers by default; set `TRUSTED_PROXY_HOPS` to the exact trusted hop count when deploying behind another hosting provider.
+
 Available commands:
 
 ```sh
@@ -41,6 +43,10 @@ GET  /config
 POST /link/auth_intent
 POST /link/auth_intent/complete
 POST /link/auth_token
+GET  /customers/:customer_id
+GET  /customers/:customer_id/wallets
+GET  /customers/:customer_id/payment_tokens
+GET  /onramp/limits
 ```
 
 No real credentials, network calls, or transactions are used by the automated tests.
@@ -85,3 +91,29 @@ Content-Type: application/json
 The response contains only `link_auth_token_client_secret` and Stripe's `expires_in` value. Pass the client secret to the SDK token-authentication API, not its Link authorization API.
 
 Stripe enables seamless sign-in only for approved integrations. Add `auth.persist_login:read` to `OAUTH_SCOPES` only after Stripe enables it for your account. `/config` reports `link_sso_enabled`; clients should hide explicit SSO actions when it is false. `/link/auth_token` returns `link_sso_unavailable` when the scope is absent or Stripe refuses token creation, and clients should use the regular Link authorization flow.
+
+## Protected customer data
+
+Pass the session token as a bearer credential when reading customer resources:
+
+```http
+GET /customers/crc_example
+Authorization: Bearer <session_token>
+```
+
+The signed customer must match the URL. The response preserves Stripe's authoritative `kyc_region`, `kyc_tiers`, per-tier verification errors, `provided_fields`, and `verifications`. Wallet and payment-token lists support `limit` and `starting_after` pagination:
+
+```http
+GET /customers/crc_example/wallets?limit=25&starting_after=ccw_previous
+GET /customers/crc_example/payment_tokens?limit=25&starting_after=cpt_previous
+Authorization: Bearer <session_token>
+```
+
+Current transaction limits can be filtered by destination. The backend derives customer, mode, and client network context rather than accepting them from query parameters:
+
+```http
+GET /onramp/limits?wallet_address=0x1234&destination_network=ethereum
+Authorization: Bearer <session_token>
+```
+
+Use the returned Stripe limits as authoritative. Numeric limit values are passed through without unit conversion; the backend does not infer limits from KYC tier or add transaction ceilings.
