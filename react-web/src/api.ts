@@ -3,6 +3,8 @@ import type { CustomerKycData, OnrampSession, Wallet } from "./types";
 const backendUrl = (process.env.REACT_APP_BACKEND_URL ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
+  handledByAuthorizationRecovery = false;
+
   constructor(
     readonly status: number,
     readonly code: string,
@@ -11,6 +13,12 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
+}
+
+export function isHandledAuthorizationError(error: unknown): boolean {
+  return (
+    error instanceof ApiError && error.handledByAuthorizationRecovery
+  );
 }
 
 type PublicConfig = {
@@ -205,12 +213,16 @@ export class OnrampApi {
     } catch (error) {
       if (
         error instanceof ApiError &&
-        authorizationErrorCodes.has(error.code) &&
-        !this.notifyingAuthorizationRequired
+        authorizationErrorCodes.has(error.code)
       ) {
         this.clearSession();
-        this.notifyingAuthorizationRequired = true;
-        this.authorizationRequiredHandler?.();
+        if (this.authorizationRequiredHandler) {
+          error.handledByAuthorizationRecovery = true;
+          if (!this.notifyingAuthorizationRequired) {
+            this.notifyingAuthorizationRequired = true;
+            this.authorizationRequiredHandler();
+          }
+        }
       }
       throw error;
     }

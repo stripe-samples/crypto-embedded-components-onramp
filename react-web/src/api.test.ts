@@ -59,6 +59,7 @@ describe("OnrampApi", () => {
     await expect(api.retrieveCustomer("crc_example")).rejects.toEqual(
       expect.objectContaining({
         code: "link_reauthorization_required",
+        handledByAuthorizationRecovery: true,
       }),
     );
 

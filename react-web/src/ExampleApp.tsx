@@ -21,7 +21,12 @@ import type {
 } from "@stripe/crypto";
 import { loadCryptoOnrampAndInitialize } from "@stripe/crypto";
 import { LinkAuthenticationModal } from "./LinkAuthenticationModal";
-import { ApiError, getPublicConfig, OnrampApi } from "./api";
+import {
+  ApiError,
+  getPublicConfig,
+  isHandledAuthorizationError,
+  OnrampApi,
+} from "./api";
 import { customerKycData } from "./customer";
 import type {
   AccountStatus,
@@ -162,6 +167,7 @@ const ExampleAppInner: React.FC<{
 
   const surfaceError = useCallback(
     (context: string, e?: unknown) => {
+      if (isHandledAuthorizationError(e)) return;
       const msg =
         e === undefined
           ? ""
@@ -270,9 +276,9 @@ const ExampleAppInner: React.FC<{
   );
 
   const handleCheckAccount = useCallback(
-    async (_email: string) => {
+    async (_email: string, preserveError = false) => {
       setLoading(true);
-      setError(null);
+      if (!preserveError) setError(null);
       setAccountStatus("idle");
       setAuthenticated(false);
       api.clearSession();
@@ -350,7 +356,7 @@ const ExampleAppInner: React.FC<{
   useEffect(() => {
     api.setAuthorizationRequiredHandler(() => {
       setError("Your Link authorization expired. Sign in again to continue.");
-      void handleCheckAccount(email);
+      void handleCheckAccount(email, true);
     });
     return () => api.setAuthorizationRequiredHandler();
   }, [api, email, handleCheckAccount]);
