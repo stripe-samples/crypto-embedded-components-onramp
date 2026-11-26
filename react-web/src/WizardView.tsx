@@ -32,7 +32,7 @@ import { LOCAL_LIMITS } from "./kycLimits";
 import { EXPLORER_URLS, getNetworks, getCurrenciesForNetwork, getUsKycCollectionStep, isEuCountry, EU_COUNTRIES } from "./shared";
 import { EU_COUNTRY_NAMES } from "./euIdentifiers";
 import type { AccountStatus, KycLevel, KycRegion, KycTier, Wallet, OnrampSession, CheckoutError } from "./types";
-import { isHandledAuthorizationError, type OnrampApi } from "./api";
+import { isAuthorizationRequiredError, type OnrampApi } from "./api";
 import { EuKycStep } from "./EuKycStep";
 import { WalletOwnershipVerificationPanel } from "./WalletOwnershipVerificationPanel";
 
@@ -342,7 +342,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
             : prev,
         );
     } catch (e: any) {
-      if (!isHandledAuthorizationError(e)) {
+      if (!isAuthorizationRequiredError(e)) {
         setError(`Quote refresh failed: ${e?.message || e}`);
       }
     }
@@ -453,7 +453,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
       setWallets((prev) => startingAfter ? [...prev, ...newWallets] : newWallets);
       setHasMoreWallets(data.has_more ?? false);
     } catch (e: any) {
-      if (!isHandledAuthorizationError(e)) {
+      if (!isAuthorizationRequiredError(e)) {
         setError(`Failed to load wallets: ${e?.message || e}`);
       }
     }

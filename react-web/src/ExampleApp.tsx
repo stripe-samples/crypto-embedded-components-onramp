@@ -24,7 +24,7 @@ import { LinkAuthenticationModal } from "./LinkAuthenticationModal";
 import {
   ApiError,
   getPublicConfig,
-  isHandledAuthorizationError,
+  isAuthorizationRequiredError,
   OnrampApi,
 } from "./api";
 import { customerKycData } from "./customer";
@@ -122,8 +122,12 @@ const ExampleAppInner: React.FC<{
     useState<HTMLElement | null>(null);
   const [accountStatus, setAccountStatus] = useState<AccountStatus>("idle");
   const [authenticated, setAuthenticated] = useState(false);
+  const [authorizationRequired, setAuthorizationRequired] = useState(false);
   const [cryptoPaymentToken, setCryptoPaymentToken] = useState<string | null>();
-  const api = useMemo(() => new OnrampApi(), []);
+  const api = useMemo(
+    () => new OnrampApi(() => setAuthorizationRequired(true)),
+    [],
+  );
   const [kycLevel, setKYCLevel] = useState<KycLevel>("REQUIRES_KYC");
   const [currentKycTier, setCurrentKycTier] = useState<"L0" | "L1" | "L2" | null>(null);
   const [kycTiers, setKycTiers] = useState<KycTier[]>([]);
@@ -167,7 +171,7 @@ const ExampleAppInner: React.FC<{
 
   const surfaceError = useCallback(
     (context: string, e?: unknown) => {
-      if (isHandledAuthorizationError(e)) return;
+      if (isAuthorizationRequiredError(e)) return;
       const msg =
         e === undefined
           ? ""
@@ -354,12 +358,11 @@ const ExampleAppInner: React.FC<{
   );
 
   useEffect(() => {
-    api.setAuthorizationRequiredHandler(() => {
-      setError("Your Link authorization expired. Sign in again to continue.");
-      void handleCheckAccount(email, true);
-    });
-    return () => api.setAuthorizationRequiredHandler();
-  }, [api, email, handleCheckAccount]);
+    if (!authorizationRequired) return;
+    setAuthorizationRequired(false);
+    setError("Your Link authorization expired. Sign in again to continue.");
+    void handleCheckAccount(email, true);
+  }, [authorizationRequired, email, handleCheckAccount]);
 
   const handleSubmitKycInfo = useCallback(
     async (info: KycInfo) => {

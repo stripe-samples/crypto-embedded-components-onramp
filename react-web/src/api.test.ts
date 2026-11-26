@@ -22,7 +22,7 @@ describe("OnrampApi", () => {
         jsonResponse(200, { session_token: "session-token" }),
       )
       .mockResolvedValueOnce(jsonResponse(200, { data: [], has_more: false }));
-    const api = new OnrampApi();
+    const api = new OnrampApi(() => {});
 
     await api.completeAuthIntent("flow-token", "crc_example");
     await api.listWallets("crc_example");
@@ -51,15 +51,13 @@ describe("OnrampApi", () => {
           },
         }),
       );
-    const api = new OnrampApi();
     const onAuthorizationRequired = jest.fn();
-    api.setAuthorizationRequiredHandler(onAuthorizationRequired);
+    const api = new OnrampApi(onAuthorizationRequired);
 
     await api.completeAuthIntent("flow-token", "crc_example");
     await expect(api.retrieveCustomer("crc_example")).rejects.toEqual(
       expect.objectContaining({
         code: "link_reauthorization_required",
-        handledByAuthorizationRecovery: true,
       }),
     );
 

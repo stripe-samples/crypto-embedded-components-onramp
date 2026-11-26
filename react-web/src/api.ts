@@ -3,8 +3,6 @@ import type { CustomerKycData, OnrampSession, Wallet } from "./types";
 const backendUrl = (process.env.REACT_APP_BACKEND_URL ?? "").replace(/\/$/, "");
 
 export class ApiError extends Error {
-  handledByAuthorizationRecovery = false;
-
   constructor(
     readonly status: number,
     readonly code: string,
@@ -13,12 +11,6 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
-}
-
-export function isHandledAuthorizationError(error: unknown): boolean {
-  return (
-    error instanceof ApiError && error.handledByAuthorizationRecovery
-  );
 }
 
 type PublicConfig = {
@@ -69,6 +61,12 @@ const authorizationErrorCodes = new Set([
   "link_reauthorization_required",
 ]);
 
+export function isAuthorizationRequiredError(error: unknown): boolean {
+  return (
+    error instanceof ApiError && authorizationErrorCodes.has(error.code)
+  );
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -103,12 +101,9 @@ export function getPublicConfig(livemode: boolean): Promise<PublicConfig> {
 
 export class OnrampApi {
   private sessionToken?: string;
-  private authorizationRequiredHandler?: () => void;
   private notifyingAuthorizationRequired = false;
 
-  setAuthorizationRequiredHandler(handler?: () => void): void {
-    this.authorizationRequiredHandler = handler;
-  }
+  constructor(private readonly onAuthorizationRequired: () => void) {}
 
   clearSession(): void {
     this.sessionToken = undefined;
@@ -211,17 +206,11 @@ export class OnrampApi {
     try {
       return await request<T>(path, init, this.sessionToken);
     } catch (error) {
-      if (
-        error instanceof ApiError &&
-        authorizationErrorCodes.has(error.code)
-      ) {
+      if (isAuthorizationRequiredError(error)) {
         this.clearSession();
-        if (this.authorizationRequiredHandler) {
-          error.handledByAuthorizationRecovery = true;
-          if (!this.notifyingAuthorizationRequired) {
-            this.notifyingAuthorizationRequired = true;
-            this.authorizationRequiredHandler();
-          }
+        if (!this.notifyingAuthorizationRequired) {
+          this.notifyingAuthorizationRequired = true;
+          this.onAuthorizationRequired();
         }
       }
       throw error;
