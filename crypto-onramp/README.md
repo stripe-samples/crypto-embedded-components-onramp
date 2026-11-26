@@ -15,6 +15,8 @@ The backend listens on `http://localhost:3001` by default. `GET /health` returns
 
 Vercel deployments automatically trust one proxy hop so transaction-limit requests send Stripe the client IP rather than the proxy IP. Other environments trust no forwarded client IP headers by default; set `TRUSTED_PROXY_HOPS` to the exact trusted hop count when deploying behind another hosting provider.
 
+For Vercel, create a project rooted at `crypto-onramp/backend` and configure the variables from `.env.example`. Vercel automatically detects the `src/server.ts` Express entrypoint.
+
 Available commands:
 
 ```sh
