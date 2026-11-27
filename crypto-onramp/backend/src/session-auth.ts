@@ -1,3 +1,5 @@
+import type { Request } from 'express';
+
 import type { AppConfig } from './config.js';
 import { ApiError } from './errors.js';
 import {
@@ -6,6 +8,12 @@ import {
   type Mode,
   type SessionTokenClaims,
 } from './jwt.js';
+
+// Link refresh tokens last a year, so clients can send this header to exercise
+// reauthorization recovery on demand. It only fails the request that sends it;
+// Link credentials are not invalidated.
+const LINK_REAUTHORIZATION_TEST_HEADER =
+  'X-Test-Link-Reauthorization-Required';
 
 export interface OAuthCredentials {
   accessToken: string;
@@ -43,13 +51,13 @@ export async function authorizeSession(
   config: AppConfig,
   jwt: JwtService,
   retrieveOAuthCredentials: RetrieveOAuthCredentials,
-  authorization: string | undefined,
+  request: Pick<Request, 'get'>,
   expectedCryptoCustomerId?: string,
 ): Promise<AuthorizedSession> {
   let claims: SessionTokenClaims;
   try {
     claims = await jwt.verifySessionToken(
-      requireBearerToken(authorization, 'session'),
+      requireBearerToken(request.get('Authorization'), 'session'),
     );
   } catch (error) {
     if (error instanceof JwtValidationError) {
@@ -73,6 +81,14 @@ export async function authorizeSession(
       403,
       'customer_not_authorized',
       'The CryptoCustomer is not authorized for this session.',
+    );
+  }
+
+  if (request.get(LINK_REAUTHORIZATION_TEST_HEADER) === 'true') {
+    throw new ApiError(
+      401,
+      'link_reauthorization_required',
+      'Link authorization must be renewed.',
     );
   }
 

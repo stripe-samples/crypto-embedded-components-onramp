@@ -186,6 +186,26 @@ describe('customer routes', () => {
     expect(expiredAccess.body.error.code).toBe('link_reauthorization_required');
   });
 
+  it('forces reauthorization when the test header is sent', async () => {
+    const forced = await request(app)
+      .get('/customers/crc_example')
+      .set('Authorization', `Bearer ${await sessionToken()}`)
+      .set('X-Test-Link-Reauthorization-Required', 'true');
+
+    expect(forced.status).toBe(401);
+    expect(forced.body.error.code).toBe('link_reauthorization_required');
+    expect(fetchImplementation).not.toHaveBeenCalled();
+    expect(stripe.retrieveCustomer).not.toHaveBeenCalled();
+
+    const invalidSession = await request(app)
+      .get('/customers/crc_example')
+      .set('Authorization', 'Bearer invalid')
+      .set('X-Test-Link-Reauthorization-Required', 'true');
+
+    expect(invalidSession.status).toBe(401);
+    expect(invalidSession.body.error.code).toBe('invalid_session_token');
+  });
+
   it('does not expose unexpected Stripe errors', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     stripe.listPaymentTokens.mockRejectedValueOnce(

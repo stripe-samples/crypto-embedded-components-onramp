@@ -488,7 +488,7 @@ export function createLinkRouter(
       config,
       jwt,
       getOAuthCredentials,
-      request.get('Authorization'),
+      request,
     );
     const authToken = await createLinkAuthToken(
       config,

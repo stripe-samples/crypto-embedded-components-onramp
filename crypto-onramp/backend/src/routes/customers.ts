@@ -87,21 +87,21 @@ export function createCustomersRouter(
   const getOAuthCredentials = (input: OAuthCredentialsInput) =>
     retrieveOAuthCredentials(config, input, fetchImplementation);
   const authorize = (
-    authorization: string | undefined,
+    request: Request,
     expectedCryptoCustomerId: string,
   ) =>
     authorizeSession(
       config,
       jwt,
       getOAuthCredentials,
-      authorization,
+      request,
       expectedCryptoCustomerId,
     );
 
   router.get('/:customer_id', async (request, response) => {
     const cryptoCustomerId = parseCryptoCustomerId(request.params.customer_id);
     const session = await authorize(
-      request.get('Authorization'),
+      request,
       cryptoCustomerId,
     );
     const stripe = stripeClientForMode(config, session.mode, stripeFactory);
@@ -124,7 +124,7 @@ export function createCustomersRouter(
     const cryptoCustomerId = parseCryptoCustomerId(request.params.customer_id);
     const page = pagination(request.query);
     const session = await authorize(
-      request.get('Authorization'),
+      request,
       cryptoCustomerId,
     );
     const stripe = stripeClientForMode(config, session.mode, stripeFactory);
@@ -142,7 +142,7 @@ export function createCustomersRouter(
     const cryptoCustomerId = parseCryptoCustomerId(request.params.customer_id);
     const page = pagination(request.query);
     const session = await authorize(
-      request.get('Authorization'),
+      request,
       cryptoCustomerId,
     );
     const stripe = stripeClientForMode(config, session.mode, stripeFactory);

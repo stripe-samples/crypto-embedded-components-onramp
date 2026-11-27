@@ -150,3 +150,9 @@ Authorization: Bearer <session_token>
 ```
 
 Retrieve, quote, and checkout verify that the session belongs to the customer and mode in the signed session credential. Quote and checkout perform an ownership preflight before the mutation.
+
+## Testing Link reauthorization
+
+Link refresh tokens last one year, so the reauthorization flow is otherwise difficult to test. Send `X-Test-Link-Reauthorization-Required: true` on any request authorized by a session token to make the backend return `401` with code `link_reauthorization_required`. Clients recover by starting a new Link authorization flow with `POST /link/auth_intent`.
+
+The header works in both test mode and live mode. It only fails the request that sends it: it does not invalidate the credentials at Link and is not forwarded to Stripe.
