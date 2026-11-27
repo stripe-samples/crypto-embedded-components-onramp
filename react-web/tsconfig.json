@@ -11,8 +11,10 @@
     "noFallthroughCasesInSwitch": true,
     "module": "esnext",
     "moduleResolution": "node",
+    "types": ["jest", "node"],
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "ignoreDeprecations": "6.0",
     "noEmit": true,
     "jsx": "react-jsx"
   },

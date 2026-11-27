@@ -32,6 +32,7 @@ import { LOCAL_LIMITS } from "./kycLimits";
 import { EXPLORER_URLS, getNetworks, getCurrenciesForNetwork, getUsKycCollectionStep, isEuCountry, EU_COUNTRIES } from "./shared";
 import { EU_COUNTRY_NAMES } from "./euIdentifiers";
 import type { AccountStatus, KycLevel, KycRegion, KycTier, Wallet, OnrampSession, CheckoutError } from "./types";
+import { isAuthorizationRequiredError, type OnrampApi } from "./api";
 import { EuKycStep } from "./EuKycStep";
 import { WalletOwnershipVerificationPanel } from "./WalletOwnershipVerificationPanel";
 
@@ -43,7 +44,8 @@ export type WizardViewProps = {
   setError: (error: string | null) => void;
   accountStatus: AccountStatus;
   cryptoCustomerId: string | null | undefined;
-  linkAuthIntentId: string | null | undefined;
+  api: OnrampApi;
+  authenticated: boolean;
   kycLevel: KycLevel;
   kycRegion: KycRegion;
   providedFields: string[];
@@ -54,7 +56,6 @@ export type WizardViewProps = {
   loading: boolean;
   polling: boolean;
   livemode: boolean;
-  settingsLai: string | null;
   onCheckAccount: (email: string) => Promise<void>;
   onRegister: (email: string, phone: string, country: string) => Promise<void>;
   onSubmitKycInfo: (info: KycInfo) => Promise<void>;
@@ -113,7 +114,7 @@ export type WizardViewProps = {
  *   L2                      → already fully verified, Next enabled
  *
  * Transaction limits (step 4):
- *   Settings "Fetch Limit API" ON  → live limits from GET /v1/crypto/onramp_transaction_limits
+ *   Settings "Fetch Limit API" ON  → live limits from GET /onramp/limits
  *   Settings "Fetch Limit API" OFF → local config (kycLimits.ts): L0 $300 / L1 $800 / L2 $1500
  *
  * To wire up a new step-up trigger from any screen:
@@ -145,7 +146,8 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // Destructure the props used inside hooks so the exhaustive-deps rule is
   // satisfied without adding the whole `props` object to dependency arrays.
   const {
-    linkAuthIntentId,
+    api,
+    authenticated,
     livemode,
     setError,
     log,
@@ -309,22 +311,10 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // ─── Quote expiration countdown + auto-refresh ────────
 
   const refreshQuote = useCallback(async () => {
-    if (!session || !linkAuthIntentId) return;
+    if (!session || !authenticated) return;
     setRefreshingQuote(true);
     try {
-      const res = await fetch(
-        `/api/crypto/onramp_sessions/${session.id}/quote`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lai: linkAuthIntentId,
-            livemode,
-          }),
-        },
-      );
-      if (res.ok) {
-        const data = await res.json();
+        const data = await api.quoteSession(session.id);
         const td = data.transaction_details;
         if (td?.quote_expiration) {
           const exp = new Date(td.quote_expiration).getTime();
@@ -351,12 +341,13 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
               }
             : prev,
         );
-      }
     } catch (e: any) {
-      setError(`Quote refresh failed: ${e?.message || e}`);
+      if (!isAuthorizationRequiredError(e)) {
+        setError(`Quote refresh failed: ${e?.message || e}`);
+      }
     }
     setRefreshingQuote(false);
-  }, [session, linkAuthIntentId, livemode, setError]);
+  }, [api, authenticated, session, setError]);
 
   // Start countdown when entering confirm with a session
   useEffect(() => {
@@ -447,38 +438,28 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // ─── Wallet fetch ─────────────────────────────────────
 
   const fetchWallets = useCallback(async (startingAfter?: string) => {
-    if (!cryptoCustomerId || !linkAuthIntentId) return;
+    if (!cryptoCustomerId || !authenticated) return;
     if (startingAfter) {
       setLoadingMoreWallets(true);
     } else {
       setLoadingWallets(true);
     }
     try {
-      const qs = new URLSearchParams({
-        lai: encodeURIComponent(linkAuthIntentId),
-        livemode: String(livemode),
-        limit: "20",
+      const data = await api.listWallets(cryptoCustomerId, {
+        limit: 20,
+        startingAfter,
       });
-      if (startingAfter) qs.append("starting_after", startingAfter);
-
-      const r = await fetch(
-        `/api/crypto/customers/${cryptoCustomerId}/wallets?${qs.toString()}`,
-      );
-      if (r.ok) {
-        const d = await r.json();
-        const newWallets: Wallet[] = d.data ?? [];
-        setWallets((prev) => startingAfter ? [...prev, ...newWallets] : newWallets);
-        setHasMoreWallets(d.has_more ?? false);
-      } else {
-        const d = await r.json().catch(() => null);
-        setError(`Failed to load wallets: ${d?.error ?? `HTTP ${r.status}`}`);
-      }
+      const newWallets: Wallet[] = data.data ?? [];
+      setWallets((prev) => startingAfter ? [...prev, ...newWallets] : newWallets);
+      setHasMoreWallets(data.has_more ?? false);
     } catch (e: any) {
-      setError(`Failed to load wallets: ${e?.message || e}`);
+      if (!isAuthorizationRequiredError(e)) {
+        setError(`Failed to load wallets: ${e?.message || e}`);
+      }
     }
     setLoadingWallets(false);
     setLoadingMoreWallets(false);
-  }, [cryptoCustomerId, linkAuthIntentId, livemode, setError]);
+  }, [api, authenticated, cryptoCustomerId, setError]);
 
   useEffect(() => {
     if (step === 2) fetchWallets();
@@ -487,21 +468,20 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
   // Fetch transaction limits when entering the Buy step, in parallel with any
   // other loading the step does.
   useEffect(() => {
-    if (step !== 4 || !linkAuthIntentId || limitSource === "local") return;
+    if (step !== 4 || !authenticated || limitSource === "local") return;
     setTransactionLimits(null);
     setLoadingLimits(true);
-    const qs = new URLSearchParams({ lai: linkAuthIntentId, livemode: String(livemode) });
-    if (selectedWallet) qs.append("wallet_address", selectedWallet);
-    if (selectedWalletNetwork) qs.append("destination_network", selectedWalletNetwork);
-    fetch(`/api/crypto/onramp_transaction_limits?${qs.toString()}`)
-      .then((r) => r.json())
+    api.retrieveLimits({
+      walletAddress: selectedWallet,
+      destinationNetwork: selectedWalletNetwork,
+    })
       .then((data) => {
         if (data && data.limits) setTransactionLimits(data);
         else log("Transaction limits fetch returned unexpected shape", JSON.stringify(data));
       })
       .catch((e) => log("Transaction limits fetch failed", e?.message || String(e)))
       .finally(() => setLoadingLimits(false));
-  }, [step, linkAuthIntentId, livemode, selectedWallet, selectedWalletNetwork, limitSource, log]);
+  }, [api, authenticated, step, selectedWallet, selectedWalletNetwork, limitSource, log]);
 
   // Reset the destination currency whenever it no longer applies to the selected
   // wallet's network (wallet changed, livemode toggled) so a stale currency is
@@ -525,10 +505,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
       ]);
       while (true) {
         try {
-          const r = await fetch(
-            `/api/crypto/onramp_sessions/${sessionId}?livemode=${props.livemode}`,
-          );
-          const d = await r.json();
+          const d = await api.retrieveSession(sessionId);
           if (terminals.has(d.status)) {
             setCheckoutResult(d);
             setBuySubStep("result");
@@ -538,7 +515,7 @@ export const WizardView: React.FC<WizardViewProps> = (props) => {
         await new Promise((r) => setTimeout(r, 2000));
       }
     },
-    [props.livemode],
+    [api],
   );
 
   // ─── Wallet ownership signature submission (Step 4) ──

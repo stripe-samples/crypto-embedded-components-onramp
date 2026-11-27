@@ -34,6 +34,9 @@ export type FeeResponsibility = "consumer" | "merchant";
 export type OnrampSession = {
   id: string;
   livemode: boolean;
+  client_secret?: string;
+  status: string;
+  transaction_id: string | null;
   source_total_amount: string;
   // Echoed from session creation — who bears the transaction fees.
   fee_responsibility?: FeeResponsibility;
