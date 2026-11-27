@@ -181,20 +181,20 @@ export function createOnrampRouter(
   const getOAuthCredentials = (input: OAuthCredentialsInput) =>
     retrieveOAuthCredentials(config, input, fetchImplementation);
   const authorize = (
-    authorization: string | undefined,
+    request: Request,
     expectedCryptoCustomerId?: string,
   ) =>
     authorizeSession(
       config,
       jwt,
       getOAuthCredentials,
-      authorization,
+      request,
       expectedCryptoCustomerId,
     );
 
   router.get('/limits', async (request, response) => {
     const filters = transactionLimitFilters(request.query);
-    const session = await authorize(request.get('Authorization'));
+    const session = await authorize(request);
     const stripe = stripeClientForMode(config, session.mode, stripeFactory);
     const limits = await stripeRequest(() =>
       stripe.crypto.onrampTransactionLimits.retrieve(
@@ -232,7 +232,7 @@ export function createOnrampRouter(
     ]);
     const cryptoCustomerId = parseCryptoCustomerId(body.crypto_customer_id);
     const session = await authorize(
-      request.get('Authorization'),
+      request,
       cryptoCustomerId,
     );
     const destinationCurrency = requiredString(body, 'destination_currency');
@@ -279,7 +279,7 @@ export function createOnrampRouter(
 
   router.get('/sessions/:session_id', async (request, response) => {
     const sessionId = parseOnrampSessionId(request.params.session_id);
-    const session = await authorize(request.get('Authorization'));
+    const session = await authorize(request);
     const stripe = stripeClientForMode(config, session.mode, stripeFactory);
     const onrampSession = await retrieveOwnedOnrampSession(
       stripe,
@@ -296,7 +296,7 @@ export function createOnrampRouter(
     async (request, response) => {
       parseStrictObject(request.body ?? {}, []);
       const sessionId = parseOnrampSessionId(request.params.session_id);
-      const session = await authorize(request.get('Authorization'));
+      const session = await authorize(request);
       const stripe = stripeClientForMode(config, session.mode, stripeFactory);
       await retrieveOwnedOnrampSession(
         stripe,
@@ -328,7 +328,7 @@ export function createOnrampRouter(
     async (request, response) => {
       parseStrictObject(request.body ?? {}, []);
       const sessionId = parseOnrampSessionId(request.params.session_id);
-      const session = await authorize(request.get('Authorization'));
+      const session = await authorize(request);
       const stripe = stripeClientForMode(config, session.mode, stripeFactory);
       await retrieveOwnedOnrampSession(
         stripe,
