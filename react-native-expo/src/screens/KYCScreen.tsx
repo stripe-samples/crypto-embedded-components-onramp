@@ -62,7 +62,7 @@ function maskNationalId(raw: string, country: string): string {
 }
 
 export default function KYCScreen({ navigation, route }: Props) {
-  const { customerId, authToken, country } = route.params;
+  const { customerId, sessionToken, country } = route.params;
   const { settings } = useSettings();
   const countryConfig = getNonEuKycCountry(country);
 
@@ -115,7 +115,7 @@ export default function KYCScreen({ navigation, route }: Props) {
     // Address screen will omit them from the attachKycInfo call.
     navigation.navigate('Address', {
       customerId,
-      authToken,
+      sessionToken,
       country,
       firstName,
       lastName,

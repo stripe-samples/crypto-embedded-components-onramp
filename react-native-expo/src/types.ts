@@ -38,13 +38,13 @@ export type RootStackParamList = {
   /** Demo configuration: KYC tier and limit source. */
   Settings: undefined;
   Auth: undefined;
-  Register: { email: string; authToken: string };
-  KYCPrimer: { customerId: string; authToken: string; registrationCountry?: string };
-  KYC: { customerId: string; authToken: string; country: NonEuKycCountry };
-  EuKyc: { customerId: string; authToken: string; country?: string };
+  Register: { email: string };
+  KYCPrimer: { customerId: string; sessionToken: string; registrationCountry?: string };
+  KYC: { customerId: string; sessionToken: string; country: NonEuKycCountry };
+  EuKyc: { customerId: string; sessionToken: string; country?: string };
   Address: {
     customerId: string;
-    authToken: string;
+    sessionToken: string;
     firstName: string;
     lastName: string;
     country: NonEuKycCountry;
@@ -57,11 +57,11 @@ export type RootStackParamList = {
   };
   Wallet: {
     customerId: string;
-    authToken: string;
+    sessionToken: string;
   };
   PaymentMethod: {
     customerId: string;
-    authToken: string;
+    sessionToken: string;
     walletAddress: string;
     network: string;
     kycRegion?: string;
@@ -91,7 +91,7 @@ export type RootStackParamList = {
    */
   KYCStepUp: {
     customerId: string;
-    authToken: string;
+    sessionToken: string;
     /** Stripe error code from the failed session creation. */
     errorCode:
       | 'crypto_onramp_missing_minimum_identity_verification'
@@ -115,7 +115,7 @@ export type RootStackParamList = {
   };
   Checkout: {
     customerId: string;
-    authToken: string;
+    sessionToken: string;
     walletAddress: string;
     network: string;
     sessionId: string;
@@ -132,7 +132,7 @@ export type RootStackParamList = {
     /** Passed from CheckoutScreen so the user can start another purchase
      *  without going through sign-in or KYC again. */
     customerId?: string;
-    authToken?: string;
+    sessionToken?: string;
     walletAddress?: string;
     network?: string;
   };

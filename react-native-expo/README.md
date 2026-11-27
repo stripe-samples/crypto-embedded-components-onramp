@@ -31,41 +31,31 @@ A React Native (Expo) example app demonstrating the [Stripe Embedded Components 
 
 ```bash
 npm install
-cd server && npm install && cd ..
+npm --prefix ../crypto-onramp/backend install
 ```
 
 ### 2. Configure environment variables
 
-**Frontend** (required):
+The app reads its Stripe publishable key from the backend's `/config` endpoint. No frontend Stripe key is required.
+
+For local development, no Expo environment file is needed:
+
+- iOS Simulator uses `http://localhost:3001`.
+- Android Emulator uses `http://10.0.2.2:3001`.
+
+For a physical device or deployed backend, copy the example environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set your Stripe publishable key:
+Set `EXPO_PUBLIC_BACKEND_URL` to a URL the device can reach:
 
 ```
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY
+EXPO_PUBLIC_BACKEND_URL=https://crypto-onramp-backend.vercelapp.stripe.dev
 ```
 
-**Backend** (required):
-
-```bash
-cp server/.env.example server/.env
-```
-
-Edit `server/.env` with your credentials:
-
-```
-STRIPE_SECRET_KEY=sk_test_YOUR_SECRET_KEY
-
-OAUTH_CLIENT_ID=YOUR_OAUTH_CLIENT_ID
-OAUTH_CLIENT_SECRET=YOUR_OAUTH_CLIENT_SECRET
-
-PORT=3001
-```
-
-Your OAuth client ID and secret are provisioned by Stripe during onboarding.
+The app uses the consolidated backend in `../crypto-onramp/backend`. Follow its [setup instructions](../crypto-onramp/README.md#backend-setup), including copying and filling in its `.env` file.
 
 ### 3. Customize for your app
 
@@ -104,7 +94,7 @@ npx expo run:ios --device
 npx expo run:android --device   
 ```
 
-When running on a physical device, update `API_URL` in `src/api/client.ts` to use your computer's local IP address instead of `localhost`.
+When running the backend on your development machine for a physical device, set `EXPO_PUBLIC_BACKEND_URL` to your machine's LAN URL, such as `http://192.168.1.100:3001`.
 
 ## Project Structure
 
@@ -154,37 +144,15 @@ example-crypto-embedded-components-onramp/
         └── stripeApiHelper.ts     # Stripe/Link API helper with token refresh
 ```
 
-## Backend API
+## Authentication and Backend API
 
-The backend is a TypeScript/Express server that proxies Stripe and Link API calls with OAuth token management.
+The app does not implement a separate username/password account system. The native SDK checks for or registers a Link account, and the consolidated backend creates and completes the Link auth intent.
 
-### Auth Routes (`/v1/auth`)
+After consent, the backend returns a 24-hour session token that authorizes customer and Onramp requests. This example keeps the session token in memory. Apps that persist it between launches should use platform-protected storage and clear it when the user signs out.
 
-| Method | Path | Description | Stripe API |
-|--------|------|-------------|------------|
-| POST | `/signup` | Register a new user | — |
-| POST | `/login` | Authenticate existing user | — |
-| POST | `/create` | Create a LinkAuthIntent | `POST https://login.link.com/v1/link_auth_intent` |
-| POST | `/save_user` | Save customer ID and exchange tokens | `POST https://login.link.com/v1/link_auth_intent/{id}/tokens` |
+The backend keeps Link OAuth credentials server-side and makes one best-effort refresh attempt when access expires. If authorization can no longer be refreshed, the app returns to Link sign-in.
 
-### Onramp Routes (`/v1`)
-
-| Method | Path | Description | Stripe API |
-|--------|------|-------------|------------|
-| GET | `/crypto_customer/:id` | Get customer KYC/verification status | [`GET /v1/crypto/customers/{id}`](https://docs.stripe.com/api/crypto/customers/retrieve) |
-| GET | `/crypto_customer/:id/wallets` | List registered wallets | [`GET /v1/crypto/customers/{id}/crypto_consumer_wallets`](https://docs.stripe.com/api/crypto/consumer_wallets/list) |
-| GET | `/crypto_customer/:id/payment_tokens` | List saved payment methods | [`GET /v1/crypto/customers/{id}/payment_tokens`](https://docs.stripe.com/api/crypto/payment_tokens/list) |
-| POST | `/create_onramp_session` | Create a crypto onramp session | [`POST /v1/crypto/onramp_sessions`](https://docs.stripe.com/api/crypto/onramp_sessions/create) |
-| POST | `/refresh_quote` | Refresh quote for latest price | [`POST /v1/crypto/onramp_sessions/{id}/quote`](https://docs.stripe.com/api/crypto/onramp_sessions/quote) |
-| POST | `/checkout` | Refresh quote and complete checkout | [`POST /v1/crypto/onramp_sessions/{id}/quote`](https://docs.stripe.com/api/crypto/onramp_sessions/quote) + [`/checkout`](https://docs.stripe.com/api/crypto/onramp_sessions/checkout) |
-
-### Data Storage
-
-The backend uses an in-memory store (`Map` objects). Local data (passwords, tokens) persists only while the server is running and resets on restart.
-
-However, once a user signs up and registers with **[Link](https://link.com/)**, their account is stored on Stripe's side and won't be reset when the server restarts. This means if you restart the server and sign in with the same email, the SDK's `hasLinkAccount` check will detect the existing Link account and skip the registration step — even though the local in-memory store was wiped. Similarly, KYC verification status, registered wallets, and saved payment methods are stored by Stripe and survive server restarts.
-
-For production use, replace `server/db/store.ts` with a real database.
+See the [backend README](../crypto-onramp/README.md) for the routes, request contract, and security model.
 
 ## Architecture
 
@@ -194,8 +162,8 @@ For production use, replace `server/db/store.ts` with a real database.
 - **SDK**: `@stripe/stripe-react-native` with onramp module
 - **Navigation**: React Navigation (native stack)
 - **Language**: TypeScript
-- **Backend**: Express, node-fetch
-- **Auth**: Bearer token (in-memory), OAuth access/refresh tokens (Stripe Link)
+- **Backend**: Shared TypeScript/Express backend in `../crypto-onramp/backend`
+- **Auth**: Backend-issued session token; Link OAuth credentials remain server-side
 
 ### Key SDK Methods Used
 

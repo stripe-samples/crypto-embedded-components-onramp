@@ -9,7 +9,7 @@
  *
  *  1. AuthScreen / RegisterScreen
  *       Operation : Link sign-in or account creation
- *       Produces  : customerId, authToken
+ *       Produces  : customerId, sessionToken
  *       Next      : KYCPrimerScreen
  *
  *  2. KYCPrimerScreen
@@ -133,7 +133,7 @@ type Props = {
 
 export default function PaymentMethodScreen({ navigation, route }: Props) {
   const {
-    customerId, authToken, walletAddress, network,
+    customerId, sessionToken, walletAddress, network,
     kycRegion,
     // Optional — passed back from KYCStepUpScreen after a step-up so the user
     // does not need to re-enter their amount or re-add their card.
@@ -257,7 +257,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 
       (async () => {
         setLoadingTiers(true);
-        const result = await getCryptoCustomer(customerId, authToken);
+        const result = await getCryptoCustomer(customerId, sessionToken);
         if (cancelled || !mountedRef.current) return;
         if (result.success) {
           setLivemode(result.data.livemode);
@@ -282,7 +282,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           pollTimerRef.current = null;
         }
       };
-    }, [customerId, authToken]),
+    }, [customerId, sessionToken]),
   );
 
   // ---------------------------------------------------------------------------
@@ -309,7 +309,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           // to return limits for their current verified tier server-side.
           // Stripe API: GET /v1/crypto/onramp_transaction_limits
           // Response: { limits: { "usd.fiat": { card: [{ limit, settlement_speed }] } } }
-          const result = await getTransactionLimits(authToken, {
+          const result = await getTransactionLimits(sessionToken, {
             walletAddress,
             destinationNetwork: network,
           });
@@ -335,7 +335,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         setLoadingLimits(false);
       }
     })();
-  }, [authToken, walletAddress, network, settings.limitSource, currentTier, verifyingKyc]);
+  }, [sessionToken, walletAddress, network, settings.limitSource, currentTier, verifyingKyc]);
 
   // ---------------------------------------------------------------------------
   // KYC verification polling
@@ -351,7 +351,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 
     const doPoll = async () => {
       if (!mountedRef.current) return;
-      const result = await getCryptoCustomer(customerId, authToken);
+      const result = await getCryptoCustomer(customerId, sessionToken);
       if (!mountedRef.current) return;
 
       if (result.success) {
@@ -391,7 +391,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
     if (!rejectedEntry) return;
 
     if (rejectedEntry.tier === 'l0') {
-      navigation.navigate('KYCPrimer', { customerId, authToken });
+      navigation.navigate('KYCPrimer', { customerId, sessionToken });
       return;
     }
 
@@ -404,7 +404,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
     const fromTier = rejectedEntry.tier === 'l2' ? 'l1' : 'l0';
 
     navigation.navigate('KYCStepUp', {
-      customerId, authToken,
+      customerId, sessionToken,
       errorCode,
       currentTier: fromTier,
       walletAddress, network,
@@ -482,7 +482,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         : 'crypto_onramp_missing_identity_verification';
 
       navigation.navigate('KYCStepUp', {
-        customerId, authToken,
+        customerId, sessionToken,
         errorCode: nextErrorCode,
         currentTier: tier,
         walletAddress, network, sourceAmount, sourceCurrency,
@@ -526,7 +526,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
         paymentToken: cryptoPaymentToken,
         walletAddress,
         customerId,
-        authToken,
+        sessionToken,
         destinationNetwork: network,
         sourceAmount: amount,
         sourceCurrency,
@@ -547,7 +547,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
           // exact error code so it selects the right collection path.
           const tier = deriveCurrentTier(kycTiers);
           navigation.navigate('KYCStepUp', {
-            customerId, authToken,
+            customerId, sessionToken,
             errorCode: errorCode as typeof kycErrorCodes[number],
             currentTier: tier,
             walletAddress, network, sourceAmount, sourceCurrency,
@@ -605,7 +605,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
 
       navigation.navigate('Checkout', {
         customerId,
-        authToken,
+        sessionToken,
         walletAddress,
         network,
         sessionId: sessionResult.data.id,
@@ -637,7 +637,7 @@ export default function PaymentMethodScreen({ navigation, route }: Props) {
       }
       navigation.navigate('Checkout', {
         customerId,
-        authToken,
+        sessionToken,
         walletAddress,
         network,
         sessionId: pendingSessionNavParams.sessionId,

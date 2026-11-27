@@ -1,6 +1,6 @@
 # Crypto Onramp
 
-This directory contains the stateless, Link-only backend and the web Crypto Onramp example that uses it. The Expo example remains at `../react-native-expo` while it migrates to the shared contract.
+This directory contains the stateless, Link-only backend and web Crypto Onramp example. The Expo example at `../react-native-expo` uses the same backend contract.
 
 ## Backend setup
 
@@ -34,7 +34,7 @@ The backend issues two signed credentials with separate purposes:
 - A 15-minute flow token will bind a backend-created Link auth intent to its completion request.
 - A 24-hour session token will authorize returning-user and protected API requests after Link consent and customer ownership have been verified.
 
-The session lifetime is intentionally bounded to one day. It preserves useful returning-user SSO while limiting exposure for a stateless credential that cannot be centrally invalidated. Native clients store only the session token in platform-protected storage and remove it on logout or “not me”; every protected request still re-checks current Link authority. OAuth access and refresh tokens remain backend-only and request-local.
+The session lifetime is intentionally bounded to one day. It preserves useful returning-user SSO while limiting exposure for a stateless credential that cannot be centrally invalidated. Native clients that persist the session token should use platform-protected storage and remove it on logout or “not me”; every protected request still re-checks current Link authority. OAuth access and refresh tokens remain backend-only and request-local.
 
 When OAuth access has expired, the backend makes one best-effort refresh attempt. It does not retry or coordinate refreshes across instances, so clients must recover from `link_reauthorization_required` by starting a new Link authorization flow.
 

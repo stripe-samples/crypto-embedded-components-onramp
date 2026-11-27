@@ -8,7 +8,11 @@ import { useOnramp } from '../hooks/useOnramp';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
-import { createAuthIntent, saveUser, getCryptoCustomer } from '../api/client';
+import {
+  completeAuthIntent,
+  createAuthIntent,
+  getCryptoCustomer,
+} from '../api/client';
 import { EU_COUNTRY_NAMES } from '../euIdentifiers';
 import {
   getNonEuKycCountry,
@@ -35,7 +39,7 @@ const COUNTRIES = [
 ];
 
 export default function RegisterScreen({ navigation, route }: Props) {
-  const { email, authToken: initialToken } = route.params;
+  const { email } = route.params;
   const [phone, setPhone] = useState('+1');
   const [country, setCountry] = useState('US');
   const [loading, setLoading] = useState(false);
@@ -71,12 +75,11 @@ export default function RegisterScreen({ navigation, route }: Props) {
         return;
       }
 
-      const intentResult = await createAuthIntent(initialToken);
+      const intentResult = await createAuthIntent(email);
       if (!intentResult.success) {
         Alert.alert('Error', intentResult.error.message);
         return;
       }
-      let authToken = intentResult.data.token ?? initialToken;
 
       const authResult = await authorize(intentResult.data.authIntentId);
       if (authResult.error) {
@@ -88,9 +91,17 @@ export default function RegisterScreen({ navigation, route }: Props) {
         return;
       }
 
-      await saveUser(authResult.customerId, authToken);
+      const sessionResult = await completeAuthIntent(
+        intentResult.data.flowToken,
+        authResult.customerId,
+      );
+      if (!sessionResult.success) {
+        Alert.alert('Error', sessionResult.error.message);
+        return;
+      }
+      const { sessionToken } = sessionResult.data;
 
-      const customerRes = await getCryptoCustomer(authResult.customerId, authToken);
+      const customerRes = await getCryptoCustomer(authResult.customerId, sessionToken);
       const kyc_level = customerRes.success ? customerRes.data.kyc_level : null;
       if (
         (kyc_level === 'L0' && country === 'US') ||
@@ -98,11 +109,11 @@ export default function RegisterScreen({ navigation, route }: Props) {
         kyc_level === 'L2' ||
         kyc_level === 'PENDING'
       ) {
-        navigation.navigate('Wallet', { customerId: authResult.customerId, authToken });
+        navigation.navigate('Wallet', { customerId: authResult.customerId, sessionToken });
       } else {
         navigation.navigate('KYCPrimer', {
           customerId: authResult.customerId,
-          authToken,
+          sessionToken,
           registrationCountry: country,
         });
       }

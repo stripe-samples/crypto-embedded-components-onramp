@@ -12,10 +12,10 @@ type Props = {
 export default function SuccessScreen({ navigation, route }: Props) {
   const {
     transactionId, destinationAmount, destinationCurrency,
-    customerId, authToken, walletAddress, network,
+    customerId, sessionToken, walletAddress, network,
   } = route.params;
 
-  const canBuyAgain = !!(customerId && authToken && walletAddress && network);
+  const canBuyAgain = !!(customerId && sessionToken && walletAddress && network);
 
   return (
     <View style={styles.container}>
@@ -39,7 +39,7 @@ export default function SuccessScreen({ navigation, route }: Props) {
             onPress={() =>
               navigation.navigate('PaymentMethod', {
                 customerId: customerId!,
-                authToken: authToken!,
+                sessionToken: sessionToken!,
                 walletAddress: walletAddress!,
                 network: network!,
               })

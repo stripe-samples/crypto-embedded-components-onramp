@@ -1,8 +1,12 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect } from 'react';
+import {
+  createNavigationContainerRef,
+  NavigationContainer,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { SettingsProvider } from '../context/SettingsContext';
+import { setAuthorizationRequiredHandler } from '../api/client';
 
 import HomeScreen from '../screens/HomeScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -19,13 +23,28 @@ import CheckoutScreen from '../screens/CheckoutScreen';
 import SuccessScreen from '../screens/SuccessScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export default function AppNavigator() {
+  useEffect(() => setAuthorizationRequiredHandler(() => {
+    if (
+      !navigationRef.isReady() ||
+      navigationRef.getCurrentRoute()?.name === 'Auth'
+    ) {
+      return;
+    }
+
+    navigationRef.resetRoot({
+      index: 1,
+      routes: [{ name: 'Home' }, { name: 'Auth' }],
+    });
+  }), []);
+
   return (
     // SettingsProvider persists the demo configuration (KYC tier, limit source)
     // to AsyncStorage and makes it available to all screens via useSettings().
     <SettingsProvider>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator
           screenOptions={{
             headerStyle: { backgroundColor: '#0a0a0a' },

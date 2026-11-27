@@ -39,7 +39,7 @@ type Props = {
 };
 
 export default function WalletScreen({ navigation, route }: Props) {
-  const { customerId, authToken } = route.params;
+  const { customerId, sessionToken } = route.params;
   const [kycRegion, setKycRegion] = useState<string | null>(null);
   const [livemode, setLivemode] = useState(true);
   const [existingWallets, setExistingWallets] = useState<ExistingWallet[]>([]);
@@ -61,8 +61,8 @@ export default function WalletScreen({ navigation, route }: Props) {
   useEffect(() => {
     (async () => {
       const [walletsRes, customerRes] = await Promise.all([
-        getCustomerWallets(customerId, authToken),
-        getCryptoCustomer(customerId, authToken),
+        getCustomerWallets(customerId, sessionToken),
+        getCryptoCustomer(customerId, sessionToken),
       ]);
       if (walletsRes.success && walletsRes.data.data.length > 0) {
         setExistingWallets(walletsRes.data.data);
@@ -75,13 +75,13 @@ export default function WalletScreen({ navigation, route }: Props) {
       }
       setLoadingWallets(false);
     })();
-  }, [customerId, authToken]);
+  }, [customerId, sessionToken]);
 
   const handleUseExisting = () => {
     if (!selectedWallet) return;
     navigation.navigate('PaymentMethod', {
       customerId,
-      authToken,
+      sessionToken,
       walletAddress: selectedWallet.wallet_address,
       network: selectedWallet.network,
       kycRegion: kycRegion ?? undefined,
@@ -104,7 +104,7 @@ export default function WalletScreen({ navigation, route }: Props) {
         // Re-fetch wallets to check if this wallet already has verified ownership
         // (e.g. a previously verified address being re-added). The RN SDK's
         // registerWalletAddress doesn't return the wallet object directly.
-        const walletsRes = await getCustomerWallets(customerId, authToken);
+        const walletsRes = await getCustomerWallets(customerId, sessionToken);
         const registeredWallet = walletsRes.success
           ? walletsRes.data.data.find((w: ExistingWallet) => w.wallet_address === address.trim())
           : null;
@@ -113,7 +113,7 @@ export default function WalletScreen({ navigation, route }: Props) {
           // Already verified — skip the challenge flow
           navigation.navigate('PaymentMethod', {
             customerId,
-            authToken,
+            sessionToken,
             walletAddress: address.trim(),
             network,
             kycRegion: kycRegion ?? undefined,
@@ -136,7 +136,7 @@ export default function WalletScreen({ navigation, route }: Props) {
       } else {
         navigation.navigate('PaymentMethod', {
           customerId,
-          authToken,
+          sessionToken,
           walletAddress: address.trim(),
           network,
           kycRegion: kycRegion ?? undefined,
@@ -160,7 +160,7 @@ export default function WalletScreen({ navigation, route }: Props) {
       }
       navigation.navigate('PaymentMethod', {
         customerId,
-        authToken,
+        sessionToken,
         walletAddress: pendingNavParams.address,
         network: pendingNavParams.network,
         kycRegion: kycRegion ?? undefined,

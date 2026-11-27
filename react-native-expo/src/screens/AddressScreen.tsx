@@ -47,7 +47,7 @@ type Props = {
 };
 
 export default function AddressScreen({ navigation, route }: Props) {
-  const { customerId, authToken, country, firstName, lastName, idNumber, dobDay, dobMonth, dobYear } = route.params;
+  const { customerId, sessionToken, country, firstName, lastName, idNumber, dobDay, dobMonth, dobYear } = route.params;
   const [submitting, setSubmitting] = useState(false);
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [form, setForm] = useState({
@@ -112,7 +112,7 @@ export default function AddressScreen({ navigation, route }: Props) {
       // Proceed to wallet attachment. PaymentMethodScreen (reached after the
       // wallet is registered) will poll getCryptoCustomer() to confirm the
       // initial KYC submission is verified before allowing a purchase.
-      navigation.navigate('Wallet', { customerId, authToken });
+      navigation.navigate('Wallet', { customerId, sessionToken });
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
