@@ -1,4 +1,13 @@
-import { OnrampApi } from "./api";
+import { decodeSessionToken, OnrampApi } from "./api";
+
+function sessionToken(payload: Record<string, unknown>): string {
+  const encode = (value: unknown) =>
+    btoa(JSON.stringify(value))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;
+}
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -16,45 +25,45 @@ describe("OnrampApi", () => {
     global.fetch = fetchMock;
   });
 
-  it("keeps the session token in memory and sends it as a bearer token", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse(200, { session_token: "session-token" }),
-      )
-      .mockResolvedValueOnce(jsonResponse(200, { data: [], has_more: false }));
-    const api = new OnrampApi(() => {});
+  it("returns the session token after completing authentication", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { session_token: "session-token" }),
+    );
+    const api = new OnrampApi(undefined, () => {});
 
-    await api.completeAuthIntent("flow-token", "crc_example");
-    await api.listWallets("crc_example");
+    await expect(
+      api.completeAuthIntent("flow-token", "crc_example"),
+    ).resolves.toBe("session-token");
+  });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "/customers/crc_example/wallets",
+  it("uses an existing session token", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { id: "crc_example" }));
+    const api = new OnrampApi("existing-session-token", () => {});
+
+    await api.retrieveCustomer("crc_example");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/customers/crc_example",
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: "Bearer session-token",
+          Authorization: "Bearer existing-session-token",
         }),
       }),
     );
   });
 
   it("asks the app to reauthorize when Link authorization expires", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse(200, { session_token: "session-token" }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse(401, {
-          error: {
-            code: "link_reauthorization_required",
-            message: "Link authorization must be renewed.",
-          },
-        }),
-      );
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(401, {
+        error: {
+          code: "link_reauthorization_required",
+          message: "Link authorization must be renewed.",
+        },
+      }),
+    );
     const onAuthorizationRequired = jest.fn();
-    const api = new OnrampApi(onAuthorizationRequired);
+    const api = new OnrampApi("session-token", onAuthorizationRequired);
 
-    await api.completeAuthIntent("flow-token", "crc_example");
     await expect(api.retrieveCustomer("crc_example")).rejects.toEqual(
       expect.objectContaining({
         code: "link_reauthorization_required",
@@ -62,5 +71,30 @@ describe("OnrampApi", () => {
     );
 
     expect(onAuthorizationRequired).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("decodeSessionToken", () => {
+  it("decodes the context carried by a session token", () => {
+    const token = sessionToken({
+      auth_intent_id: "lai_example",
+      crypto_customer_id: "crc_example",
+      exp: 1_800_000_000,
+      mode: "test",
+      token_type: "session",
+    });
+
+    expect(decodeSessionToken(token)).toEqual({
+      authIntentId: "lai_example",
+      cryptoCustomerId: "crc_example",
+      expiresAt: 1_800_000_000_000,
+      mode: "test",
+    });
+  });
+
+  it("rejects tokens without the expected session claims", () => {
+    expect(() => decodeSessionToken("not-a-jwt")).toThrow(
+      "Invalid session token.",
+    );
   });
 });
