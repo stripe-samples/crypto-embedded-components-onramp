@@ -1,0 +1,14 @@
+{
+  "name": "crypto-onramp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "backend": "npm --prefix backend run dev",
+    "expo": "npm --prefix expo start",
+    "expo:android": "npm --prefix expo run android",
+    "expo:ios": "npm --prefix expo run ios",
+    "web": "npm --prefix web start",
+    "web:build": "npm --prefix web run build",
+    "install:all": "npm install --prefix backend && npm install --prefix expo && npm install --prefix web"
+  }
+}
