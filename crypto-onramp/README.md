@@ -1,6 +1,15 @@
 # Crypto Onramp
 
-This directory contains the stateless, Link-only backend and web Crypto Onramp example. The Expo example at `../react-native-expo` uses the same backend contract.
+This directory contains the stateless, Link-only backend and the Expo and web Crypto Onramp examples that use it.
+
+## Project layout
+
+```text
+crypto-onramp/
+  backend/  Shared Node.js API used by both clients
+  expo/     Expo React Native app
+  web/      Vite React web app
+```
 
 ## Backend setup
 
