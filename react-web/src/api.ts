@@ -1,6 +1,8 @@
 import type { CustomerKycData, OnrampSession, Wallet } from "./types";
 
-const backendUrl = (process.env.REACT_APP_BACKEND_URL ?? "").replace(/\/$/, "");
+const backendUrl = (
+  import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3001"
+).replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(

@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { decodeSessionToken, OnrampApi } from "./api";
 
 function sessionToken(payload: Record<string, unknown>): string {
@@ -18,11 +19,11 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe("OnrampApi", () => {
-  const fetchMock = jest.fn();
+  const fetchMock = vi.fn();
 
   beforeEach(() => {
     fetchMock.mockReset();
-    global.fetch = fetchMock;
+    globalThis.fetch = fetchMock;
   });
 
   it("returns the session token after completing authentication", async () => {
@@ -43,7 +44,7 @@ describe("OnrampApi", () => {
     await api.retrieveCustomer("crc_example");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/customers/crc_example",
+      "http://localhost:3001/customers/crc_example",
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer existing-session-token",
@@ -61,7 +62,7 @@ describe("OnrampApi", () => {
         },
       }),
     );
-    const onAuthorizationRequired = jest.fn();
+    const onAuthorizationRequired = vi.fn();
     const api = new OnrampApi("session-token", onAuthorizationRequired);
 
     await expect(api.retrieveCustomer("crc_example")).rejects.toEqual(
