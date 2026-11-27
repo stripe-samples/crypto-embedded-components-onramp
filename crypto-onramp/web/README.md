@@ -2,14 +2,14 @@
 
 Demo app for the Stripe Embedded Components Onramp Web SDK.
 
-The app uses the consolidated backend in `../crypto-onramp/backend`.
+The app uses the consolidated backend in `../backend`.
 
 ## Development
 
 Set up the backend first:
 
 ```sh
-cd ../crypto-onramp/backend
+cd ../backend
 cp .env.example .env
 npm ci
 ```

@@ -30,7 +30,7 @@ router.get('/crypto_customer/:customerId', async (req: Request, res: Response) =
     const provided_fields = data.provided_fields ?? [];
 
     // Derive kyc_level from kyc_tiers.
-    // Mirrors the logic in react-web/server/index.ts GET /api/crypto/customers/:customerId.
+    // Mirrors the logic in crypto-onramp/web/src/customer.ts.
     const INACTIVE = new Set(['not_available', 'not_started']);
     const ATTEMPTED = new Set(['pending', 'rejected', 'verified']);
     const statusOf = (tier: string) =>
