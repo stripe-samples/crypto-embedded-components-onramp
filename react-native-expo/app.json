@@ -14,6 +14,7 @@
     "scheme": "cryptoonramp",
     "plugins": [
       "./plugins/withMaterialTheme",
+      "./plugins/withIosDeploymentTarget",
       [
         "@stripe/stripe-react-native",
         {
