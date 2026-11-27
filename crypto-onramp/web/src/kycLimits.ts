@@ -3,7 +3,7 @@
  * "Local Config". These exist so merchants can explore the KYC step-up flow
  * without needing a live Stripe account.
  *
- * Mirrors src/kycLimits.ts in react-native-expo.
+ * Mirrors src/kycLimits.ts in crypto-onramp/expo.
  *
  *   L0 — $300  → triggers step-up when buying more than $300
  *   L1 — $800  → triggers step-up when buying more than $800

@@ -31,7 +31,7 @@ A React Native (Expo) example app demonstrating the [Stripe Embedded Components 
 
 ```bash
 npm install
-npm --prefix ../crypto-onramp/backend install
+npm --prefix ../backend install
 ```
 
 ### 2. Configure environment variables
@@ -55,7 +55,7 @@ Set `EXPO_PUBLIC_BACKEND_URL` to a URL the device can reach:
 EXPO_PUBLIC_BACKEND_URL=https://crypto-onramp-backend.vercelapp.stripe.dev
 ```
 
-The app uses the consolidated backend in `../crypto-onramp/backend`. Follow its [setup instructions](../crypto-onramp/README.md#backend-setup), including copying and filling in its `.env` file.
+The app uses the consolidated backend in `../backend`. Follow its [setup instructions](../README.md#backend-setup), including copying and filling in its `.env` file.
 
 ### 3. Customize for your app
 
@@ -139,7 +139,7 @@ After consent, the backend returns a 24-hour session token that authorizes custo
 
 The backend keeps Link OAuth credentials server-side and makes one best-effort refresh attempt when access expires. If authorization can no longer be refreshed, the app returns to Link sign-in.
 
-See the [backend README](../crypto-onramp/README.md) for the routes, request contract, and security model.
+See the [backend README](../README.md) for the routes, request contract, and security model.
 
 ## Architecture
 
@@ -149,7 +149,7 @@ See the [backend README](../crypto-onramp/README.md) for the routes, request con
 - **SDK**: `@stripe/stripe-react-native` with onramp module
 - **Navigation**: React Navigation (native stack)
 - **Language**: TypeScript
-- **Backend**: Shared TypeScript/Express backend in `../crypto-onramp/backend`
+- **Backend**: Shared TypeScript/Express backend in `../backend`
 - **Auth**: Backend-issued session token; Link OAuth credentials remain server-side
 
 ### Key SDK Methods Used
