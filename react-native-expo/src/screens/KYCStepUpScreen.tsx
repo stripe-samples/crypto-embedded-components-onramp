@@ -110,7 +110,7 @@ function formatSSN(raw: string): string {
 
 export default function KYCStepUpScreen({ navigation, route }: Props) {
   const {
-    customerId, authToken, errorCode, currentTier,
+    customerId, sessionToken, errorCode, currentTier,
     walletAddress, network, sourceAmount, sourceCurrency,
     destinationCurrency, paymentToken, paymentLabel,
   } = route.params;
@@ -153,7 +153,7 @@ export default function KYCStepUpScreen({ navigation, route }: Props) {
   // PaymentMethod (showing the old, lower KYC tier) instead of the updated one.
   const goToPaymentMethod = () => {
     navigation.navigate('PaymentMethod', {
-      customerId, authToken, walletAddress, network,
+      customerId, sessionToken, walletAddress, network,
       sourceAmount, destinationCurrency, paymentToken, paymentLabel,
     });
   };

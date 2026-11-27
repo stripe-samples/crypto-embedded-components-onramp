@@ -58,7 +58,7 @@ const COUNTRY_OPTIONS: { code: string; label: string }[] = [
 ];
 
 export default function KYCPrimerScreen({ navigation, route }: Props) {
-  const { customerId, authToken, registrationCountry } = route.params;
+  const { customerId, sessionToken, registrationCountry } = route.params;
   const { settings } = useSettings();
 
   // Default to the country the user registered with, if available.
@@ -81,9 +81,9 @@ export default function KYCPrimerScreen({ navigation, route }: Props) {
 
   const handleContinue = () => {
     if (isEu) {
-      navigation.navigate('EuKyc', { customerId, authToken, country });
+      navigation.navigate('EuKyc', { customerId, sessionToken, country });
     } else if (isNonEuKycCountry(country)) {
-      navigation.navigate('KYC', { customerId, authToken, country });
+      navigation.navigate('KYC', { customerId, sessionToken, country });
     }
   };
 

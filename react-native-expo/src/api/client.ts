@@ -8,25 +8,27 @@ import { Platform } from 'react-native';
 // Configuration
 // ============================================================================
 
-const API_URL = Platform.OS === 'android'
+const DEFAULT_API_URL = Platform.OS === 'android'
   ? 'http://10.0.2.2:3001'
   : 'http://localhost:3001';
+
+const CONFIGURED_API_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim();
+const API_URL = (CONFIGURED_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
 // ============================================================================
 // Response Types
 // ============================================================================
 
-export interface AuthResponse {
-  token: string;
+export interface PublicConfig {
+  link_sso_enabled: boolean;
+  livemode: boolean;
+  publishable_key: string;
+  supported_modes: ('test' | 'live')[];
 }
 
 export interface AuthIntentResponse {
   authIntentId: string;
-  token?: string;
-}
-
-export interface SaveUserResponse {
-  success: boolean;
+  flowToken: string;
 }
 
 export interface KycTierEntry {
@@ -41,8 +43,17 @@ export interface CryptoCustomerResponse {
   kyc_level: string;
   kyc_region: string | null;
   kycTiers: KycTierEntry[];
-  verifications: Array<{ name: string; status: string; errors: string[] }>;
+  verifications: { name: string; status: string; errors: string[] }[];
   provided_fields: string[];
+}
+
+interface RawCryptoCustomerResponse {
+  id: string;
+  livemode: boolean;
+  kyc_region?: string | null;
+  kyc_tiers?: KycTierEntry[];
+  verifications?: { name: string; status: string; errors: string[] }[];
+  provided_fields?: string[];
 }
 
 /**
@@ -155,7 +166,7 @@ export interface OnrampSessionResponse {
    */
   next_action?: {
     type?: string;
-    required_verifications?: Array<'kyc_verified' | 'id_document_verified'>;
+    required_verifications?: ('kyc_verified' | 'id_document_verified')[];
   };
 }
 
@@ -195,6 +206,35 @@ export type ApiResult<T> =
   | { success: true; data: T }
   | { success: false; error: APIError };
 
+const authorizationErrorCodes = new Set([
+  'invalid_session_token',
+  'link_authorization_required',
+  'link_reauthorization_required',
+]);
+
+let authorizationRequiredHandler: (() => void) | undefined;
+
+export function isAuthorizationRequiredError(error: APIError): boolean {
+  return authorizationErrorCodes.has(error.code);
+}
+
+export function setAuthorizationRequiredHandler(handler: () => void): () => void {
+  authorizationRequiredHandler = handler;
+  return () => {
+    if (authorizationRequiredHandler === handler) {
+      authorizationRequiredHandler = undefined;
+    }
+  };
+}
+
+function apiFailure(code: string, message: string): { success: false; error: APIError } {
+  const error = { code, message };
+  if (isAuthorizationRequiredError(error)) {
+    authorizationRequiredHandler?.();
+  }
+  return { success: false, error };
+}
+
 // ============================================================================
 // HTTP Helpers
 // ============================================================================
@@ -202,50 +242,53 @@ export type ApiResult<T> =
 async function post<T>(
   path: string,
   body: object,
-  authToken?: string,
+  bearerToken?: string,
 ): Promise<ApiResult<T>> {
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`;
 
     const res = await fetch(`${API_URL}${path}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      const message = data.error ?? data.message ?? JSON.stringify(data);
-      const code = data.code ?? `HTTP_${res.status}`;
+      const message = data?.error?.message ?? `Request failed with status ${res.status}.`;
+      const code = data?.error?.code ?? 'request_failed';
       console.error(`[API] ${path} failed (${res.status}):`, JSON.stringify(data));
-      return { success: false, error: { code, message } };
+      return apiFailure(code, message);
     }
     return { success: true, data };
-  } catch (err: any) {
-    return { success: false, error: { code: 'NETWORK_ERROR', message: err.message } };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'The request failed.';
+    return { success: false, error: { code: 'network_error', message } };
   }
 }
 
 async function get<T>(
   path: string,
-  authToken?: string,
+  sessionToken?: string,
   params?: URLSearchParams,
 ): Promise<ApiResult<T>> {
   try {
     const headers: Record<string, string> = {};
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`;
     const query = params?.toString() ? `?${params.toString()}` : '';
 
     const res = await fetch(`${API_URL}${path}${query}`, { method: 'GET', headers });
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      const message = data.error ?? data.message ?? JSON.stringify(data);
+      const message = data?.error?.message ?? `Request failed with status ${res.status}.`;
+      const code = data?.error?.code ?? 'request_failed';
       console.error(`[API] ${path} failed (${res.status}):`, JSON.stringify(data));
-      return { success: false, error: { code: `HTTP_${res.status}`, message } };
+      return apiFailure(code, message);
     }
     return { success: true, data };
-  } catch (err: any) {
-    return { success: false, error: { code: 'NETWORK_ERROR', message: err.message } };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'The request failed.';
+    return { success: false, error: { code: 'network_error', message } };
   }
 }
 
@@ -253,34 +296,38 @@ async function get<T>(
 // Auth API
 // ============================================================================
 
-export async function signup(
-  email: string,
-  password: string,
-): Promise<ApiResult<AuthResponse>> {
-  return post('/v1/auth/signup', { email, password });
-}
-
-export async function login(
-  email: string,
-  password: string,
-): Promise<ApiResult<AuthResponse>> {
-  return post('/v1/auth/login', { email, password });
+export function getPublicConfig(): Promise<ApiResult<PublicConfig>> {
+  return get('/config', undefined, new URLSearchParams({ livemode: 'false' }));
 }
 
 export async function createAuthIntent(
-  authToken: string,
-  oauthScopes = 'kyc.status:read,crypto:ramp',
+  email: string,
 ): Promise<ApiResult<AuthIntentResponse>> {
-  const res = await post<any>('/v1/auth/create', { oauth_scopes: oauthScopes }, authToken);
-  if (!res.success) return res;
-  return { success: true, data: { authIntentId: res.data.authIntentId, token: res.data.token } };
+  const result = await post<{ auth_intent_id: string; flow_token: string }>(
+    '/link/auth_intent',
+    { email, livemode: false },
+  );
+  if (!result.success) return result;
+  return {
+    success: true,
+    data: {
+      authIntentId: result.data.auth_intent_id,
+      flowToken: result.data.flow_token,
+    },
+  };
 }
 
-export async function saveUser(
+export async function completeAuthIntent(
+  flowToken: string,
   cryptoCustomerId: string,
-  authToken: string,
-): Promise<ApiResult<SaveUserResponse>> {
-  return post('/v1/auth/save_user', { crypto_customer_id: cryptoCustomerId }, authToken);
+): Promise<ApiResult<{ sessionToken: string }>> {
+  const result = await post<{ session_token: string }>(
+    '/link/auth_intent/complete',
+    { crypto_customer_id: cryptoCustomerId },
+    flowToken,
+  );
+  if (!result.success) return result;
+  return { success: true, data: { sessionToken: result.data.session_token } };
 }
 
 // ============================================================================
@@ -289,23 +336,60 @@ export async function saveUser(
 
 export async function getCryptoCustomer(
   customerId: string,
-  authToken: string,
+  sessionToken: string,
 ): Promise<ApiResult<CryptoCustomerResponse>> {
-  return get(`/v1/crypto_customer/${customerId}`, authToken);
+  const result = await get<RawCryptoCustomerResponse>(
+    `/customers/${customerId}`,
+    sessionToken,
+  );
+  if (!result.success) return result;
+
+  const kycTiers = result.data.kyc_tiers ?? [];
+  const inactiveStatuses = ['not_available', 'not_started'];
+  const statusOf = (tier: string) =>
+    kycTiers.find(candidate => candidate.tier === tier)?.verification_status ?? 'not_started';
+
+  let kycLevel: CryptoCustomerResponse['kyc_level'];
+  if (kycTiers.some(tier => tier.verification_status === 'pending')) {
+    kycLevel = 'PENDING';
+  } else if (kycTiers.every(tier => inactiveStatuses.includes(tier.verification_status))) {
+    kycLevel = 'REQUIRES_KYC';
+  } else {
+    const currentTier = deriveCurrentTier(kycTiers);
+    const currentStatus = statusOf(currentTier);
+    kycLevel = currentStatus === 'verified'
+      ? currentTier.toUpperCase()
+      : currentStatus === 'rejected'
+        ? 'REJECTED'
+        : 'REQUIRES_KYC';
+  }
+
+  return {
+    success: true,
+    data: {
+      customerId: result.data.id,
+      livemode: result.data.livemode,
+      kyc_level: kycLevel,
+      kyc_region: result.data.kyc_region ?? null,
+      kycTiers,
+      verifications: result.data.verifications ?? [],
+      provided_fields: result.data.provided_fields ?? [],
+    },
+  };
 }
 
 export async function getCustomerWallets(
   customerId: string,
-  authToken: string,
+  sessionToken: string,
 ): Promise<ApiResult<WalletsResponse>> {
-  return get(`/v1/crypto_customer/${customerId}/wallets`, authToken);
+  return get(`/customers/${customerId}/wallets`, sessionToken);
 }
 
 export async function getPaymentTokens(
   customerId: string,
-  authToken: string,
+  sessionToken: string,
 ): Promise<ApiResult<PaymentTokensResponse>> {
-  return get(`/v1/crypto_customer/${customerId}/payment_tokens`, authToken);
+  return get(`/customers/${customerId}/payment_tokens`, sessionToken);
 }
 
 // ============================================================================
@@ -316,7 +400,7 @@ export async function createOnrampSession(params: {
   paymentToken: string;
   walletAddress: string;
   customerId: string;
-  authToken: string;
+  sessionToken: string;
   destinationNetwork: string;
   sourceAmount: number;
   sourceCurrency: string;
@@ -325,36 +409,33 @@ export async function createOnrampSession(params: {
   feeResponsibility?: 'consumer' | 'merchant';
 }): Promise<ApiResult<OnrampSessionResponse>> {
   return post(
-    '/v1/create_onramp_session',
+    '/onramp/sessions',
     {
-      ui_mode: 'headless',
       payment_token: params.paymentToken,
       source_amount: params.sourceAmount,
       source_currency: params.sourceCurrency,
       destination_currency: params.destinationCurrency,
       destination_network: params.destinationNetwork,
-      destination_networks: [params.destinationNetwork],
       wallet_address: params.walletAddress,
       crypto_customer_id: params.customerId,
-      customer_ip_address: '127.0.0.1',
       ...(params.feeResponsibility === 'merchant' ? { fee_responsibility: 'merchant' } : {}),
     },
-    params.authToken,
+    params.sessionToken,
   );
 }
 
 export async function refreshQuote(
   sessionId: string,
-  authToken: string,
+  sessionToken: string,
 ): Promise<ApiResult<QuoteResponse>> {
-  return post('/v1/refresh_quote', { cos_id: sessionId }, authToken);
+  return post(`/onramp/sessions/${sessionId}/quote`, {}, sessionToken);
 }
 
 export async function checkoutSession(
   sessionId: string,
-  authToken: string,
+  sessionToken: string,
 ): Promise<ApiResult<OnrampSessionResponse>> {
-  return post('/v1/checkout', { cos_id: sessionId }, authToken);
+  return post(`/onramp/sessions/${sessionId}/checkout`, {}, sessionToken);
 }
 
 /**
@@ -374,7 +455,7 @@ export async function checkoutSession(
  * before creating a session to detect step-up requirements proactively.
  */
 export async function getTransactionLimits(
-  authToken: string,
+  sessionToken: string,
   params?: {
     walletAddress?: string;
     destinationNetwork?: string;
@@ -383,5 +464,5 @@ export async function getTransactionLimits(
   const qs = new URLSearchParams();
   if (params?.walletAddress) qs.append('wallet_address', params.walletAddress);
   if (params?.destinationNetwork) qs.append('destination_network', params.destinationNetwork);
-  return get('/v1/crypto/onramp_transaction_limits', authToken, qs);
+  return get('/onramp/limits', sessionToken, qs);
 }

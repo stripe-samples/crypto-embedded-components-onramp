@@ -32,7 +32,7 @@ function formatCurrency(amount: string | number, currency: string): string {
 
 export default function CheckoutScreen({ navigation, route }: Props) {
   const {
-    customerId, authToken, walletAddress, network, sessionId,
+    customerId, sessionToken, walletAddress, network, sessionId,
     sourceAmount, sourceCurrency, destinationCurrency, paymentLabel,
     livemode,
   } = route.params;
@@ -65,14 +65,14 @@ export default function CheckoutScreen({ navigation, route }: Props) {
     if (quoteRefreshDisabled) return;
     setLoadingQuote(true);
     try {
-      const res = await refreshQuote(sessionId, authToken);
+      const res = await refreshQuote(sessionId, sessionToken);
       if (res.success) {
         setQuote(res.data.transaction_details);
         const expiresAt = res.data.transaction_details.quote_expiration;
         const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
         setCountdown(remaining);
       } else {
-        if (res.error.message?.includes('locked state')) {
+        if (res.error.code === 'crypto_onramp_locked_state_change') {
           setQuoteRefreshDisabled(true);
         }
         console.warn('[checkout] refresh quote failed:', res.error.message);
@@ -82,7 +82,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
     } finally {
       setLoadingQuote(false);
     }
-  }, [sessionId, authToken, quoteRefreshDisabled]);
+  }, [sessionId, sessionToken, quoteRefreshDisabled]);
 
   useEffect(() => {
     fetchQuote();
@@ -113,7 +113,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
 
     try {
       const result = await performCheckout(sessionId, async () => {
-        const res = await checkoutSession(sessionId, authToken);
+        const res = await checkoutSession(sessionId, sessionToken);
         if (!res.success) throw new Error(res.error.message);
         if (res.data.transaction_details?.last_error === 'wallet_ownership_verification_required') {
           pendingVerifContextRef.current = {
@@ -141,7 +141,7 @@ export default function CheckoutScreen({ navigation, route }: Props) {
       navigation.replace('Success', {
         destinationAmount: quote?.destination_amount,
         destinationCurrency,
-        customerId, authToken, walletAddress, network,
+        customerId, sessionToken, walletAddress, network,
       });
     } catch (err) {
       if (err instanceof Error && err.message === 'wallet_ownership_verification_required') {
@@ -257,7 +257,9 @@ export default function CheckoutScreen({ navigation, route }: Props) {
         </View>
         <View style={styles.quoteRow}>
           <Text style={styles.quoteSub}>
-            {loadingQuote
+            {quoteRefreshDisabled
+              ? 'Price locked'
+              : loadingQuote
               ? 'Updating price...'
               : countdown > 0
                 ? `Price updates in ${countdown}s`

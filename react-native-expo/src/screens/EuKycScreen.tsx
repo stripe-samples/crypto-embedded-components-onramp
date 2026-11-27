@@ -56,7 +56,7 @@ const EU_COUNTRY_OPTIONS = Object.entries(EU_COUNTRY_NAMES).sort((a, b) =>
 );
 
 export default function EuKycScreen({ navigation, route }: Props) {
-  const { customerId, authToken, country: initialCountry } = route.params;
+  const { customerId, sessionToken, country: initialCountry } = route.params;
   const {
     attachKycInfo,
     retrieveMissingIdentifiers,
@@ -257,13 +257,13 @@ export default function EuKycScreen({ navigation, route }: Props) {
         setError(`Verification error: ${result.error.message}`);
         return;
       }
-      navigation.navigate('Wallet', { customerId, authToken });
+      navigation.navigate('Wallet', { customerId, sessionToken });
     } catch (e: any) {
       setError(`Verification error: ${e?.message ?? e}`);
     } finally {
       setSubmitting(false);
     }
-  }, [verifyIdentity, navigation, customerId, authToken]);
+  }, [verifyIdentity, navigation, customerId, sessionToken]);
 
   // ─── Helpers ────────────────────────────────────────────
 
