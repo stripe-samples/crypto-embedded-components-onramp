@@ -109,7 +109,7 @@ example-crypto-embedded-components-onramp/
 ├── .env.example                   # Frontend env template
 ├── plugins/
 │   └── withMaterialTheme.js       # Expo plugin: Android Material Components theme
-├── src/
+└── src/
 │   ├── api/
 │   │   └── client.ts              # Typed API client
 │   ├── constants.ts               # Shared constants
@@ -128,20 +128,7 @@ example-crypto-embedded-components-onramp/
 │   │   ├── PaymentMethodScreen.tsx# Payment method and amount selection
 │   │   ├── CheckoutScreen.tsx     # Review order with live quote and fee breakdown
 │   │   └── SuccessScreen.tsx      # Purchase confirmation
-│   └── types.ts                   # Navigation params and shared types
-└── server/
-    ├── server.ts                  # Express entry point
-    ├── package.json
-    ├── tsconfig.json
-    ├── .env.example               # Backend env template
-    ├── db/
-    │   └── store.ts               # In-memory user store
-    ├── routes/
-    │   ├── auth.ts                # Auth routes
-    │   └── onramp.ts              # Crypto Onramp routes
-    ├── constants.ts               # Server-side shared constants
-    └── utils/
-        └── stripeApiHelper.ts     # Stripe/Link API helper with token refresh
+    └── types.ts                   # Navigation params and shared types
 ```
 
 ## Authentication and Backend API
